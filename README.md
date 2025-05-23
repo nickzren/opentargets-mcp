@@ -1,1 +1,63 @@
-# opentargets-mcp
+# Open Targets MCP Server
+
+A standalone Model Context Protocol (MCP) server that exposes the Open Targets Platform GraphQL API as a set of tools.
+
+This server allows MCP-compatible clients (like Claude Desktop) to query and reason over the rich datasets available in Open Targets.
+
+### Core Features
+* Provides a comprehensive set of tools for querying Open Targets data including targets, diseases, drugs, evidence, and safety information.
+* Implements the MCP standard for robust integration with external client applications.
+* Includes an example AI agent demonstrating how to use the underlying library to answer complex, multi-step questions.
+
+***
+
+### Prerequisites
+* **Mamba** or **Conda** for environment management.
+
+***
+
+### Setup
+1.  **Clone the repository and navigate into it.**
+2.  **Create and activate the environment** using the provided file. This also installs the package in editable mode.
+    ```bash
+    mamba env create -f environment.yml
+    mamba activate opentargets-mcp
+    ```
+
+***
+
+### Usage
+
+#### As a Standalone Server (Primary)
+
+The main goal of this project is to run the MCP server. Once your environment is active, you can start the server with its installed command:
+```bash
+opentargets-mcp
+```
+This server can be connected to any MCP client. For example, to connect to Claude Desktop, you would configure it to use the full path to this command, which you can find by running `which opentargets-mcp`.
+
+#### Running the Example AI Agent
+
+The repository includes an example agent that demonstrates how to use the query library to build intelligent applications.
+
+1.  **Set your API Key:** Create a `.env` file in the project root.
+    ```bash
+    echo "OPENAI_API_KEY='your-openai-api-key-here'" > .env
+    ```
+2.  **Run the agent:**
+    ```bash
+    python examples/agent_app.py
+
+    --- Open Targets ReAct Agent ---
+    Ask a complex question. Type 'exit' to quit.
+    
+    > Find targets for metatropic dysplasia and see if TRPV4 is one of them."
+    ```
+***
+
+### Testing
+
+To verify that the query functions are working correctly, run the test suite:
+```bash
+pytest tests/ -v
+```
