@@ -64,9 +64,10 @@ This server can be connected to any MCP client. For example, to connect to Claud
 
 The repository includes an example agent that demonstrates how to use the query library to build intelligent applications.
 
-1.  **Set your API Key:** Create a `.env` file in the project root.
+1.  **Set your API credentials:** Create or update a `.env` file in the project root:
     ```bash
-    echo "OPENAI_API_KEY='your-openai-api-key-here'" > .env
+    echo "OPENAI_MODEL=gpt-4.1-mini" > .env
+    echo "OPENAI_API_KEY=YOUR_API_KEY" >> .env
     ```
 2.  **Run the agent:**
     ```bash
@@ -75,7 +76,7 @@ The repository includes an example agent that demonstrates how to use the query 
     --- Open Targets ReAct Agent ---
     Ask a complex question. Type 'exit' to quit.
     
-    > Find targets for metatropic dysplasia and see if TRPV4 is one of them."
+    > Find targets for metatropic dysplasia and see if TRPV4 is one of them.
     ```
 ***
 

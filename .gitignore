@@ -49,5 +49,4 @@ Thumbs.db
 
 # Project specific
 *.log
-.env
 .cache/
