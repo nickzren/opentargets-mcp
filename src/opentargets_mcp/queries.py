@@ -1,353 +1,116 @@
+# src/opentargets_mcp/queries.py
 import aiohttp
 import asyncio
 from typing import Any, Dict, List, Optional
-from functools import lru_cache
 import time
+import logging
+
+# Configure basic logging for the client
+logger = logging.getLogger(__name__)
+# Set a default logging level if not configured elsewhere
+if not logger.hasHandlers():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 class OpenTargetsClient:
-    def __init__(self):
-        self.base_url = "https://api.platform.opentargets.org/api/v4/graphql"
+    """
+    An asynchronous client for interacting with the Open Targets Platform GraphQL API.
+    Includes caching functionality to reduce redundant API calls.
+    """
+    def __init__(self, base_url: str = "https://api.platform.opentargets.org/api/v4/graphql", cache_ttl: int = 3600):
+        """
+        Initializes the OpenTargetsClient.
+
+        Args:
+            base_url (str): The base URL for the Open Targets GraphQL API.
+            cache_ttl (int): Time-to-live for cache entries in seconds (default is 1 hour).
+        """
+        self.base_url = base_url
         self.session = None
         self._cache = {}
-        self._cache_ttl = 3600  # 1 hour
-    
+        self._cache_ttl = cache_ttl
+
     async def _ensure_session(self):
-        if self.session is None:
+        """Ensures an active aiohttp.ClientSession is available."""
+        if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession()
-    
+
     async def _query(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Executes a GraphQL query against the Open Targets API.
+        """
         await self._ensure_session()
-        
-        cache_key = f"{query}:{str(variables)}"
+
+        cache_key = f"{query}:{str(sorted(variables.items())) if variables else ''}"
+
         if cache_key in self._cache:
             cached_data, timestamp = self._cache[cache_key]
             if time.time() - timestamp < self._cache_ttl:
                 return cached_data
-        
+            else:
+                del self._cache[cache_key]
+
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
-        
-        async with self.session.post(
-            self.base_url,
-            json=payload,
-            headers={"Content-Type": "application/json"}
-        ) as response:
-            result = await response.json()
-            
-            if "errors" in result:
-                raise Exception(f"GraphQL errors: {result['errors']}")
-            
-            self._cache[cache_key] = (result, time.time())
-            return result
-    
-    async def search_targets(self, query: str, size: int = 10) -> Dict[str, Any]:
-        graphql_query = """
-        query SearchTargets($query: String!, $size: Int!) {
-            search(queryString: $query, entityNames: ["target"], page: {size: $size, index: 0}) {
-                hits {
-                    id
-                    entity
-                    name
-                    description
-                    score
-                    object {
-                        ... on Target {
-                            id
-                            approvedSymbol
-                            approvedName
-                            biotype
-                            functionDescriptions
-                        }
-                    }
-                }
-                total
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"query": query, "size": size})
-        return result.get("data", {})
-    
-    async def get_target_info(self, ensembl_id: str) -> Dict[str, Any]:
-        graphql_query = """
-        query TargetInfo($ensemblId: String!) {
-            target(ensemblId: $ensemblId) {
-                id
-                approvedSymbol
-                approvedName
-                biotype
-                functionDescriptions
-                synonyms {
-                    label
-                    source
-                }
-                genomicLocation {
-                    chromosome
-                    start
-                    end
-                    strand
-                }
-                pathways {
-                    pathway
-                    pathwayId
-                    topLevelTerm
-                }
-                subcellularLocations {
-                    location
-                    source
-                }
-                tractability {
-                    label
-                    modality
-                    value
-                }
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"ensemblId": ensembl_id})
-        return result.get("data", {})
-    
-    async def get_target_diseases(self, ensembl_id: str, page: int = 0, size: int = 10) -> Dict[str, Any]:
-        graphql_query = """
-        query TargetAssociatedDiseases($ensemblId: String!, $page: Int!, $size: Int!) {
-            target(ensemblId: $ensemblId) {
-                associatedDiseases(page: {index: $page, size: $size}) {
-                    count
-                    rows {
-                        disease {
-                            id
-                            name
-                            description
-                            therapeuticAreas {
-                                id
-                                name
-                            }
-                        }
-                        score
-                        datatypeScores {
-                            id
-                            score
-                        }
-                    }
-                }
-            }
-        }
-        """
-        result = await self._query(
-            graphql_query,
-            {"ensemblId": ensembl_id, "page": page, "size": size}
-        )
-        return result.get("data", {})
-    
-    async def get_target_drugs(self, ensembl_id: str) -> Dict[str, Any]:
-        graphql_query = """
-        query TargetKnownDrugs($ensemblId: String!) {
-            target(ensemblId: $ensemblId) {
-                knownDrugs {
-                    count
-                    rows {
-                        drug {
-                            id
-                            name
-                            drugType
-                            maximumClinicalTrialPhase
-                            hasBeenWithdrawn
-                            description
-                            isApproved
-                            mechanismsOfAction {
-                                rows {
-                                    mechanismOfAction
-                                    targetName
-                                    actionType
-                                }
-                            }
-                        }
-                        drugId
-                        targetId
-                        disease {
-                            id
-                            name
-                        }
-                        phase
-                        status
-                        urls {
-                            name
-                            url
-                        }
-                    }
-                }
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"ensemblId": ensembl_id})
-        return result.get("data", {})
-    
-    async def search_diseases(self, query: str, size: int = 10) -> Dict[str, Any]:
-        graphql_query = """
-        query SearchDiseases($query: String!, $size: Int!) {
-            search(queryString: $query, entityNames: ["disease"], page: {size: $size, index: 0}) {
-                hits {
-                    id
-                    entity
-                    name
-                    description
-                    score
-                    object {
-                        ... on Disease {
-                            id
-                            name
-                            description
-                            therapeuticAreas {
-                                id
-                                name
-                            }
-                            synonyms {
-                                relation
-                                terms
-                            }
-                        }
-                    }
-                }
-                total
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"query": query, "size": size})
-        return result.get("data", {})
-    
-    async def get_disease_targets(self, efo_id: str, page: int = 0, size: int = 10) -> Dict[str, Any]:
-        graphql_query = """
-        query DiseaseAssociatedTargets($efoId: String!, $page: Int!, $size: Int!) {
-            disease(efoId: $efoId) {
-                id
-                name
-                associatedTargets(page: {index: $page, size: $size}) {
-                    count
-                    rows {
-                        target {
-                            id
-                            approvedSymbol
-                            approvedName
-                            biotype
-                        }
-                        score
-                        datatypeScores {
-                            id
-                            score
-                        }
-                    }
-                }
-            }
-        }
-        """
-        result = await self._query(
-            graphql_query,
-            {"efoId": efo_id, "page": page, "size": size}
-        )
-        return result.get("data", {})
-    
-    async def get_evidence(
-        self,
-        ensembl_id: str,
-        efo_id: str,
-        datasource_ids: Optional[List[str]] = None,
-        size: int = 10,
-    ) -> Dict[str, Any]:
-        # ── Open Targets v4: evidences moved under the `target` object ──
-        graphql_query = """
-        query TargetDiseaseEvidences(
-            $ensemblId: String!
-            $efoId: String!
-            $size: Int!
-            $datasourceIds: [String!]
-        ) {
-            target(ensemblId: $ensemblId) {
-                evidences(
-                    efoIds: [$efoId]
-                    datasourceIds: $datasourceIds
-                    size: $size
-                ) {
-                    count
-                    rows {
-                        score
-                        datasourceId
-                        datatypeId
-                        diseaseFromSource
-                        targetFromSource
-                        id
-                    }
-                }
-            }
-        }
-        """
 
-        variables = {
-            "ensemblId": ensembl_id,
-            "efoId": efo_id,
-            "size": size,
-            "datasourceIds": datasource_ids or None,  # explicit null if not filtering
-        }
+        response_text_for_error = "" # Variable to store response text in case of error
 
-        result = await self._query(graphql_query, variables)
+        try:
+            async with self.session.post(
+                self.base_url,
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            ) as response:
+                response_text_for_error = await response.text() # Read text early for logging
 
-        # Preserve the old return structure expected by Step 6
-        target_block = result.get("data", {}).get("target", {})
-        return {"evidences": target_block.get("evidences", {})}
-    
-    async def get_target_safety(self, ensembl_id: str) -> Dict[str, Any]:
-        graphql_query = """
-        query TargetSafety($ensemblId: String!) {
-            target(ensemblId: $ensemblId) {
-                id
-                approvedSymbol
-                safetyLiabilities {
-                    event
-                    eventId
-                    effects {
-                        direction
-                        dosing
-                    }
-                }
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"ensemblId": ensembl_id})
-        return result.get("data", {})
-    
-    async def get_target_tractability(self, ensembl_id: str) -> Dict[str, Any]:
-        graphql_query = """
-        query TargetTractability($ensemblId: String!) {
-            target(ensemblId: $ensemblId) {
-                id
-                approvedSymbol
-                tractability {
-                    id
-                    modality
-                    value
-                }
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"ensemblId": ensembl_id})
-        return result.get("data", {})
-    
-    async def get_drug_warnings(self, chembl_id: str) -> Dict[str, Any]:
-        graphql_query = """
-        query DrugWarnings($chemblId: String!) {
-            drug(chemblId: $chemblId) {
-                id
-                name
-                hasBeenWithdrawn
-                blackBoxWarning
-                # The 'withdrawnNotice' block has been removed
-                # as it is no longer supported by the API.
-            }
-        }
-        """
-        result = await self._query(graphql_query, {"chemblId": chembl_id})
-        return result.get("data", {})
-    
+                if not response.ok:
+                    logger.error(
+                        f"HTTP Error {response.status} for {response.url}. "
+                        f"Query: {query[:200]}... Variables: {variables}. "
+                        f"Response Body: {response_text_for_error}"
+                    )
+                    response.raise_for_status() # This will now raise ClientResponseError
+
+                result = await response.json() # If .ok, this should succeed. If not .ok, raise_for_status handled it.
+                                             # However, response.json() might fail if body was not valid JSON even on 200.
+
+                if "errors" in result and result["errors"]:
+                    logger.error(
+                        f"GraphQL API errors: {result['errors']}. "
+                        f"Query: {query[:200]}... Variables: {variables}."
+                    )
+                    # Depending on strictness, you might want to raise an exception here.
+                    # For now, we return data if present, which might be partial.
+                    # raise Exception(f"GraphQL API errors: {result['errors']}")
+
+                data = result.get("data", {})
+                self._cache[cache_key] = (data, time.time())
+                return data
+
+        except aiohttp.ClientResponseError as e: # Handles errors from response.raise_for_status()
+            # The response_text_for_error should have been populated above if not response.ok
+            # If it was an ok response but .json() failed, this specific exception might not have the body easily.
+            logger.error(
+                f"ClientResponseError during GraphQL query: {e}. "
+                f"URL: {e.request_info.url if e.request_info else 'N/A'}, Status: {e.status}. "
+                f"Query: {query[:200]}... Variables: {variables}. "
+                f"Response Body (if captured): {response_text_for_error}",
+                exc_info=True
+            )
+            raise Exception(f"HTTP request failed: {e.status}, {e.message}. Response: {response_text_for_error}") from e
+
+        except Exception as e: # Catch-all for other unexpected errors (e.g., JSONDecodeError if response.ok but not JSON)
+            logger.error(
+                f"An unexpected error occurred during GraphQL query: {e}. "
+                f"Query: {query[:200]}... Variables: {variables}. "
+                f"Response Body (if captured): {response_text_for_error}",
+                exc_info=True
+            )
+            raise
+
     async def close(self):
-        if self.session:
+        """Closes the aiohttp.ClientSession."""
+        if self.session and not self.session.closed:
             await self.session.close()
+            self.session = None
