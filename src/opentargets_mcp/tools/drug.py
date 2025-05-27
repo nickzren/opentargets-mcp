@@ -27,40 +27,39 @@ class DrugApi:
                 blackBoxWarning
                 yearOfFirstApproval
                 maximumClinicalTrialPhase
-                mechanismsOfAction { # PaginatedMechanismsOfAction - API schema shows this is not paginated directly here.
-                    rows { # MechanismOfActionRow
+                mechanismsOfAction {
+                    rows {
                        mechanismOfAction
-                       targetName 
-                       targets { # Target
+                       targetName
+                       targets {
                            id
                            approvedSymbol
                        }
                        actionType
-                       references { # Publication
+                       references {
                            source
                            ids
                            urls
                        }
                     }
-                    # count # Not available on mechanismsOfAction directly
                 }
-                indications { # Removed 'page' argument as it's not supported for this field
-                    rows { # IndicationRow
-                        disease { # Disease
+                indications {
+                    rows {
+                        disease {
                             id
                             name
                             therapeuticAreas {id, name}
                         }
                         maxPhaseForIndication
-                        references { # Publication
+                        references {
                             source
                             ids
                         }
                     }
-                    count # Count is available on IndicationConnection
+                    count
                 }
-                linkedTargets { # LinkedTargetConnection
-                    rows { # Target
+                linkedTargets {
+                    rows {
                         id
                         approvedSymbol
                         biotype
@@ -79,21 +78,21 @@ class DrugApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                adverseEvents(page: {index: $pageIndex, size: $pageSize}) { # PaginatedAdverseEvents
+                adverseEvents(page: {index: $pageIndex, size: $pageSize}) {
                     count
-                    criticalValue 
-                    rows { # AdverseEvent
+                    criticalValue
+                    rows {
                         meddraCode
-                        name # Corrected from 'term' to 'name' for MedDRA term
-                        count 
-                        logLR 
+                        name
+                        count
+                        logLR
                     }
                 }
             }
         }
         """
         return await client._query(graphql_query, {"chemblId": chembl_id, "pageIndex": page_index, "pageSize": page_size})
-    
+
     async def get_drug_pharmacovigilance(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
         """
         Get pharmacovigilance data for a drug, including adverse events and withdrawal information.
@@ -106,15 +105,120 @@ class DrugApi:
                 isApproved
                 hasBeenWithdrawn
                 blackBoxWarning
-                adverseEvents(page: {index: 0, size: 20}) { # Sample of AEs
+                adverseEvents(page: {index: 0, size: 20}) {
                      count
                      criticalValue
-                     rows { 
-                         meddraCode, 
-                         name, # Corrected from 'term' to 'name'
-                         count, 
-                         logLR 
+                     rows {
+                         meddraCode,
+                         name,
+                         count,
+                         logLR
                      }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"chemblId": chembl_id})
+
+    async def get_drug_linked_diseases(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
+        """Get all diseases linked to a drug through clinical trials or mechanisms."""
+        graphql_query = """
+        query DrugLinkedDiseases($chemblId: String!) {
+            drug(chemblId: $chemblId) {
+                id
+                name
+                linkedDiseases {
+                    count
+                    rows {
+                        id
+                        name
+                        description
+                        therapeuticAreas {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"chemblId": chembl_id})
+
+    async def get_drug_linked_targets(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
+        """Get all targets linked to a drug based on mechanism of action."""
+        graphql_query = """
+        query DrugLinkedTargets($chemblId: String!) {
+            drug(chemblId: $chemblId) {
+                id
+                name
+                linkedTargets {
+                    count
+                    rows {
+                        id
+                        approvedSymbol
+                        approvedName
+                        biotype
+                        proteinIds {
+                            id
+                            source
+                        }
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"chemblId": chembl_id})
+
+    async def get_drug_warnings(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
+        """Get detailed drug warnings including withdrawals and black box warnings."""
+        graphql_query = """
+        query DrugWarnings($chemblId: String!) {
+            drug(chemblId: $chemblId) {
+                id
+                name
+                hasBeenWithdrawn
+                blackBoxWarning
+                drugWarnings {
+                    warningType
+                    description
+                    toxicityClass
+                    country
+                    year
+                    efoId
+                    efoTerm
+                    efoIdForWarningClass
+                    references {
+                        id
+                        source
+                        url
+                    }
+                    chemblIds
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"chemblId": chembl_id})
+
+    async def get_drug_cross_references(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
+        """Get cross-references to other databases for a drug."""
+        graphql_query = """
+        query DrugCrossReferences($chemblId: String!) {
+            drug(chemblId: $chemblId) {
+                id
+                name
+                synonyms
+                crossReferences {
+                    source
+                    reference
+                }
+                parentMolecule {
+                    id
+                    name
+                }
+                childMolecules {
+                    id
+                    name
+                    drugType
                 }
             }
         }
@@ -149,6 +253,42 @@ DRUG_TOOLS = [
         name="get_drug_pharmacovigilance",
         description="Get pharmacovigilance data for a drug, including adverse events and withdrawal information.",
          inputSchema={
+            "type": "object",
+            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
+            "required": ["chembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_drug_linked_diseases",
+        description="Get all diseases linked to a drug through approved indications or clinical trials.",
+        inputSchema={
+            "type": "object",
+            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
+            "required": ["chembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_drug_linked_targets",
+        description="Get all molecular targets linked to a drug based on its mechanism of action.",
+        inputSchema={
+            "type": "object",
+            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
+            "required": ["chembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_drug_warnings",
+        description="Get detailed safety warnings for a drug including withdrawals, black box warnings, and toxicity information.",
+        inputSchema={
+            "type": "object",
+            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
+            "required": ["chembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_drug_cross_references",
+        description="Get cross-references to other databases and parent/child molecule relationships.",
+        inputSchema={
             "type": "object",
             "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
             "required": ["chembl_id"]

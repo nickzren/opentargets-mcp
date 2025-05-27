@@ -49,18 +49,15 @@ class TargetApi:
         return await client._query(graphql_query, {"ensemblId": ensembl_id, "pageIndex": page_index, "pageSize": page_size})
 
     async def get_target_known_drugs(self, client: OpenTargetsClient, ensembl_id: str, page_index: int = 0, page_size: int = 10) -> Dict[str, Any]:
-        """Get drugs/compounds known to interact with a specific target.
-        Note: page_index and page_size are not used in this query as the API indicated 'page' is an unknown argument for knownDrugs.
-        This will fetch all known drugs for the target.
-        """
+        """Get drugs/compounds known to interact with a specific target."""
         graphql_query = """
-        query TargetKnownDrugs($ensemblId: String!) { 
+        query TargetKnownDrugs($ensemblId: String!) {
             target(ensemblId: $ensemblId) {
-                knownDrugs { 
+                knownDrugs {
                     count
                     rows {
-                        drugId 
-                        targetId 
+                        drugId
+                        targetId
                         drug {
                             id
                             name
@@ -70,7 +67,7 @@ class TargetApi:
                             description
                         }
                         mechanismOfAction
-                        disease { 
+                        disease {
                             id
                             name
                         }
@@ -97,11 +94,11 @@ class TargetApi:
                 safetyLiabilities {
                     event
                     eventId
-                    effects { 
+                    effects {
                         direction
                         dosing
                     }
-                    datasource 
+                    datasource
                 }
             }
         }
@@ -116,10 +113,10 @@ class TargetApi:
             target(ensemblId: $ensemblId) {
                 id
                 approvedSymbol
-                tractability { 
-                    modality 
-                    value 
-                    label 
+                tractability {
+                    modality
+                    value
+                    label
                 }
             }
         }
@@ -168,16 +165,13 @@ class TargetApi:
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
     async def get_target_mouse_phenotypes(self, client: OpenTargetsClient, ensembl_id: str, page_index: int = 0, page_size: int = 10) -> Dict[str, Any]:
-        """Get mouse knockout phenotypes associated with a target from MGI and IMPC.
-        Note: page_index and page_size are not used as API indicated 'page' is an unknown argument.
-        This will fetch all mouse phenotypes for the target.
-        """
+        """Get mouse knockout phenotypes associated with a target from MGI and IMPC."""
         graphql_query = """
-        query TargetMousePhenotypes($ensemblId: String!) { 
+        query TargetMousePhenotypes($ensemblId: String!) {
             target(ensemblId: $ensemblId) {
                 id
                 approvedSymbol
-                mousePhenotypes { 
+                mousePhenotypes {
                     modelPhenotypeId
                     modelPhenotypeLabel
                     biologicalModels {
@@ -196,21 +190,18 @@ class TargetApi:
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
     async def get_target_pathways_and_go_terms(self, client: OpenTargetsClient, ensembl_id: str, page_index: int = 0, page_size: int = 10) -> Dict[str, Any]:
-        """Get pathway (e.g., Reactome) and Gene Ontology term annotations for a target.
-        Note: page_index and page_size are not used as API indicated 'page' is an unknown argument.
-        This will fetch all pathways and GO terms.
-        """
+        """Get pathway (e.g., Reactome) and Gene Ontology term annotations for a target."""
         graphql_query = """
-        query TargetPathwaysAndGOTerms($ensemblId: String!) { 
+        query TargetPathwaysAndGOTerms($ensemblId: String!) {
             target(ensemblId: $ensemblId) {
                 id
                 approvedSymbol
-                pathways { 
+                pathways {
                     pathway
                     pathwayId
                     topLevelTerm
                 }
-                geneOntology { 
+                geneOntology {
                     aspect
                     geneProduct
                     evidence
@@ -229,18 +220,18 @@ class TargetApi:
         """Get protein-protein interactions for a target from sources like IntAct, Reactome, Signor."""
         graphql_query = """
         query TargetInteractions(
-            $ensemblId: String!, 
+            $ensemblId: String!,
             $sourceDatabase: String,
             $scoreThreshold: Float,
-            $pageIndex: Int!, 
+            $pageIndex: Int!,
             $pageSize: Int!
         ) {
             target(ensemblId: $ensemblId) {
                 id
                 approvedSymbol
                 interactions(
-                    sourceDatabase: $sourceDatabase, 
-                    scoreThreshold: $scoreThreshold, 
+                    sourceDatabase: $sourceDatabase,
+                    scoreThreshold: $scoreThreshold,
                     page: {index: $pageIndex, size: $pageSize}
                 ) {
                     count
@@ -315,7 +306,7 @@ class TargetApi:
         }
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
-    
+
     async def get_target_literature_occurrences(
         self,
         client: OpenTargetsClient,
@@ -324,27 +315,23 @@ class TargetApi:
         start_year: Optional[int] = None,
         end_year: Optional[int] = None,
         cursor: Optional[str] = None,
-        size: int = 20 
+        size: int = 20
     ) -> Dict[str, Any]:
-        """Get literature co-occurrences for a target, optionally with other entities (diseases, drugs).
-        Note: 'size' parameter is not used in GQL query as API reported it as unknown.
-        """
+        """Get literature co-occurrences for a target, optionally with other entities (diseases, drugs)."""
         graphql_query = """
-        query TargetLiteratureOcurrences( 
+        query TargetLiteratureOcurrences(
             $ensemblId: String!,
             $additionalIds: [String!],
             $startYear: Int,
             $endYear: Int,
             $cursor: String
-            # $size: Int! removed from query variables
         ) {
             target(ensemblId: $ensemblId) {
-                literatureOcurrences( # Corrected field name
+                literatureOcurrences(
                     additionalIds: $additionalIds,
                     startYear: $startYear,
                     endYear: $endYear,
                     cursor: $cursor
-                    # size: $size argument removed
                 ) {
                     count
                     cursor
@@ -373,7 +360,6 @@ class TargetApi:
             "startYear": start_year,
             "endYear": end_year,
             "cursor": cursor,
-            # size is not passed to variables for this query
         }
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
@@ -381,17 +367,141 @@ class TargetApi:
     async def get_target_prioritization(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
         """Get target prioritization scores from various sources."""
         graphql_query = """
-        query TargetPrioritisation($ensemblId: String!) { 
+        query TargetPrioritisation($ensemblId: String!) {
             target(ensemblId: $ensemblId) {
                 id
                 approvedSymbol
-                prioritisation { # This field returns KeyValueArray according to API error
-                    items {      # KeyValueArray has an 'items' field
+                prioritisation {
+                    items {
                         key
                         value
-                        # label, description, link, source are not on KeyValue, but on TargetPrioritisationScore
-                        # If API returns KeyValueArray, we can only get key/value here.
                     }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+
+    async def get_target_depmap_essentiality(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+        """Get DepMap essentiality data for a target across cell lines."""
+        graphql_query = """
+        query TargetDepMapEssentiality($ensemblId: String!) {
+            target(ensemblId: $ensemblId) {
+                id
+                approvedSymbol
+                isEssential
+                depMapEssentiality {
+                    tissueId
+                    tissueName
+                    screens {
+                        depmapId
+                        cellLineName
+                        diseaseCellLineId
+                        diseaseFromSource
+                        geneEffect
+                        expression
+                        mutation
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+
+    async def get_target_hallmarks(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+        """Get cancer hallmarks associated with a target."""
+        graphql_query = """
+        query TargetHallmarks($ensemblId: String!) {
+            target(ensemblId: $ensemblId) {
+                id
+                approvedSymbol
+                hallmarks {
+                    attributes {
+                        name
+                        description
+                        pmid
+                    }
+                    cancerHallmarks {
+                        label
+                        impact
+                        description
+                        pmid
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+
+    async def get_target_homologues(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+        """Get homologues for a target across species."""
+        graphql_query = """
+        query TargetHomologues($ensemblId: String!) {
+            target(ensemblId: $ensemblId) {
+                id
+                approvedSymbol
+                homologues {
+                    speciesId
+                    speciesName
+                    targetGeneId
+                    targetGeneSymbol
+                    homologyType
+                    queryPercentageIdentity
+                    targetPercentageIdentity
+                    isHighConfidence
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+
+    async def get_target_subcellular_locations(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+        """Get subcellular location information for a target."""
+        graphql_query = """
+        query TargetSubcellularLocations($ensemblId: String!) {
+            target(ensemblId: $ensemblId) {
+                id
+                approvedSymbol
+                subcellularLocations {
+                    location
+                    source
+                    termSL
+                    labelSL
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+
+    async def get_target_alternative_genes(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+        """Get alternative genes and database cross-references for a target."""
+        graphql_query = """
+        query TargetAlternativeGenes($ensemblId: String!) {
+            target(ensemblId: $ensemblId) {
+                id
+                approvedSymbol
+                alternativeGenes
+                transcriptIds
+                dbXrefs {
+                    id
+                    source
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+
+    async def get_target_class(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+        """Get target class information from ChEMBL."""
+        graphql_query = """
+        query TargetClass($ensemblId: String!) {
+            target(ensemblId: $ensemblId) {
+                id
+                approvedSymbol
+                targetClass {
+                    id
+                    label
+                    level
                 }
             }
         }
@@ -531,7 +641,7 @@ TARGET_TOOLS = [
         }
     ),
     types.Tool(
-        name="get_target_literature_occurrences", 
+        name="get_target_literature_occurrences",
         description="Get literature co-occurrences for a target, optionally with other entities (diseases, drugs).",
         inputSchema={
             "type": "object",
@@ -549,6 +659,60 @@ TARGET_TOOLS = [
     types.Tool(
         name="get_target_prioritization",
         description="Get target prioritization scores from various sources.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
+            "required": ["ensembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_target_depmap_essentiality",
+        description="Get DepMap cancer cell line essentiality data showing if a target is essential for cell survival.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
+            "required": ["ensembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_target_hallmarks",
+        description="Get cancer hallmarks associated with a target, showing its role in cancer biology.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
+            "required": ["ensembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_target_homologues",
+        description="Get homologous genes for a target across different species.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
+            "required": ["ensembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_target_subcellular_locations",
+        description="Get subcellular location information showing where the protein is found in the cell.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
+            "required": ["ensembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_target_alternative_genes",
+        description="Get alternative gene identifiers and database cross-references.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
+            "required": ["ensembl_id"]
+        }
+    ),
+    types.Tool(
+        name="get_target_class",
+        description="Get ChEMBL target classification showing the protein family and drug target class.",
         inputSchema={
             "type": "object",
             "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},

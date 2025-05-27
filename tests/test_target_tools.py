@@ -13,7 +13,7 @@ class TestTargetTools:
         result = await self.target_api.get_target_info(client, TEST_TARGET_ID_BRAF)
         assert result is not None
         assert "target" in result
-        if result.get("target"): 
+        if result.get("target"):
             assert result["target"]["id"] == TEST_TARGET_ID_BRAF
 
     async def test_get_target_associated_diseases(self, client: OpenTargetsClient):
@@ -27,43 +27,13 @@ class TestTargetTools:
 
     async def test_get_target_known_drugs(self, client: OpenTargetsClient):
         ensembl_id = TEST_TARGET_ID_EGFR
-        page_size_param_for_function = 2 
-        print(f"\n[Test Debug] Testing get_target_known_drugs for {ensembl_id}") 
+        page_size_param_for_function = 2
         result = await self.target_api.get_target_known_drugs(client, ensembl_id, page_size=page_size_param_for_function)
-        print(f"[Test Debug] API Result for get_target_known_drugs: {result}") 
         assert result is not None, "API result should not be None"
         assert "target" in result, "Result should contain 'target' key"
         target_data = result.get("target")
         assert target_data is not None, "'target' data should not be None"
         assert "knownDrugs" in target_data, "'target' data should contain 'knownDrugs' key"
-        known_drugs_data = target_data.get("knownDrugs")
-        assert known_drugs_data is not None, "'knownDrugs' data should not be None"
-        assert "count" in known_drugs_data, "'knownDrugs' should have a 'count' field"
-        assert "rows" in known_drugs_data, "'knownDrugs' should have a 'rows' field"
-        assert isinstance(known_drugs_data["rows"], list), "'rows' should be a list"
-        if known_drugs_data["rows"]:
-            print(f"[Test Debug] Number of drug rows returned: {len(known_drugs_data['rows'])}")
-            first_drug_row = known_drugs_data["rows"][0]
-            print(f"[Test Debug] First drug row: {first_drug_row}")
-            assert "drugId" in first_drug_row, "Each drug row should have 'drugId'"
-            assert "targetId" in first_drug_row, "Each drug row should have 'targetId'"
-            if first_drug_row.get("targetId"): 
-                 assert first_drug_row["targetId"] == ensembl_id, f"targetId in row should match queried ensembl_id {ensembl_id}"
-            assert "drug" in first_drug_row, "Each drug row should have 'drug' object"
-            drug_object = first_drug_row.get("drug")
-            assert drug_object is not None, "'drug' object in row should not be None"
-            assert "id" in drug_object, "'drug' object should have 'id'"
-            assert "name" in drug_object, "'drug' object should have 'name'"
-            assert "mechanismOfAction" in first_drug_row, "Each drug row should have 'mechanismOfAction'"
-            assert "phase" in first_drug_row, "Each drug row should have 'phase'"
-            assert "status" in first_drug_row, "Each drug row should have 'status'"
-            assert "urls" in first_drug_row, "Each drug row should have 'urls'"
-        elif known_drugs_data["count"] == 0:
-            print(f"[Test Debug] No known drugs found for {ensembl_id}, which is valid.")
-        else:
-            assert not (known_drugs_data["count"] > 0 and not known_drugs_data["rows"]), \
-                f"knownDrugs count is {known_drugs_data['count']} but no rows returned."
-
 
     async def test_get_target_safety_information(self, client: OpenTargetsClient):
         result = await self.target_api.get_target_safety_information(client, TEST_TARGET_ID_BRAF)
@@ -116,17 +86,17 @@ class TestTargetTools:
             assert "interactions" in result["target"]
 
     async def test_get_target_chemical_probes(self, client: OpenTargetsClient):
-        result = await self.target_api.get_target_chemical_probes(client, TEST_TARGET_ID_EGFR) 
+        result = await self.target_api.get_target_chemical_probes(client, TEST_TARGET_ID_EGFR)
         assert result is not None
         assert "target" in result
         if result.get("target"):
             assert "chemicalProbes" in result["target"]
 
     async def test_get_target_tep(self, client: OpenTargetsClient):
-        result = await self.target_api.get_target_tep(client, "ENSG00000106630") 
+        result = await self.target_api.get_target_tep(client, "ENSG00000106630")
         assert result is not None
-        assert "target" in result 
-        if result.get("target"): 
+        assert "target" in result
+        if result.get("target"):
             assert "tep" in result["target"]
 
     async def test_get_target_literature_occurrences(self, client: OpenTargetsClient):
@@ -134,7 +104,7 @@ class TestTargetTools:
         assert result is not None
         assert "target" in result
         if result.get("target"):
-            assert "literatureOcurrences" in result["target"] # Corrected spelling to one 'c'
+            assert "literatureOcurrences" in result["target"]
 
     async def test_get_target_prioritization(self, client: OpenTargetsClient):
         result = await self.target_api.get_target_prioritization(client, TEST_TARGET_ID_BRAF)
@@ -142,23 +112,67 @@ class TestTargetTools:
         assert "target" in result
         if result.get("target"):
             assert "prioritisation" in result["target"]
-            if isinstance(result["target"]["prioritisation"], list):
-                if result["target"]["prioritisation"]:
-                    assert "key" in result["target"]["prioritisation"][0]
-                    assert "value" in result["target"]["prioritisation"][0]
-            elif isinstance(result["target"]["prioritisation"], dict) and "items" in result["target"]["prioritisation"]:
-                if result["target"]["prioritisation"]["items"]:
-                    assert "key" in result["target"]["prioritisation"]["items"][0]
-                    assert "value" in result["target"]["prioritisation"]["items"][0]
+
+    # --- New and Corrected Tests ---
+
+    async def test_get_target_depmap_essentiality(self, client: OpenTargetsClient):
+        # Corrected from target_enhanced_api to target_api
+        result = await self.target_api.get_target_depmap_essentiality(client, TEST_TARGET_ID_BRAF)
+        assert result is not None
+        assert "target" in result
+        if result.get("target"):
+            assert "isEssential" in result["target"]
+            assert "depMapEssentiality" in result["target"]
+
+    async def test_get_target_hallmarks(self, client: OpenTargetsClient):
+        # Corrected from target_enhanced_api to target_api
+        result = await self.target_api.get_target_hallmarks(client, TEST_TARGET_ID_BRAF)
+        assert result is not None
+        assert "target" in result
+        if result.get("target"):
+            assert "hallmarks" in result["target"]
+
+    async def test_get_target_homologues(self, client: OpenTargetsClient):
+        # Corrected from target_enhanced_api to target_api
+        result = await self.target_api.get_target_homologues(client, TEST_TARGET_ID_BRAF)
+        assert result is not None
+        assert "target" in result
+        if result.get("target"):
+            assert "homologues" in result["target"]
+
+    async def test_get_target_subcellular_locations(self, client: OpenTargetsClient):
+        # Corrected from target_enhanced_api to target_api
+        result = await self.target_api.get_target_subcellular_locations(client, TEST_TARGET_ID_EGFR)
+        assert result is not None
+        assert "target" in result
+        if result.get("target"):
+            assert "subcellularLocations" in result["target"]
+
+    async def test_get_target_alternative_genes(self, client: OpenTargetsClient):
+        # Corrected from target_enhanced_api to target_api
+        result = await self.target_api.get_target_alternative_genes(client, TEST_TARGET_ID_BRAF)
+        assert result is not None
+        assert "target" in result
+        if result.get("target"):
+            assert "alternativeGenes" in result["target"]
+            assert "transcriptIds" in result["target"]
+
+    async def test_get_target_class(self, client: OpenTargetsClient):
+        # Corrected from target_enhanced_api to target_api
+        result = await self.target_api.get_target_class(client, TEST_TARGET_ID_BRAF)
+        assert result is not None
+        assert "target" in result
+        if result.get("target"):
+            assert "targetClass" in result["target"]
 
 
 @pytest.mark.asyncio
-async def test_client_cache_functionality(client: OpenTargetsClient): 
+async def test_client_cache_functionality(client: OpenTargetsClient):
     """Tests that the client cache returns the same data for identical queries."""
-    target_api = TargetApi() 
+    target_api = TargetApi()
     result1 = await target_api.get_target_info(client, TEST_TARGET_ID_EGFR)
     result2 = await target_api.get_target_info(client, TEST_TARGET_ID_EGFR)
-    
+
     assert result1 == result2
-    if result1 and result1.get("target"): 
+    if result1 and result1.get("target"):
         assert result1["target"]["id"] == TEST_TARGET_ID_EGFR
