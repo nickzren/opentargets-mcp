@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies with Micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml # Path to your environment file
+          environment-name: opentargets-mcp # Name of the environment to create/activate
+          cache-environment: true # Enable caching of the environment
+          init-shell: bash # Initialize for bash shell, useful for subsequent steps
+          # create-args: "" # Optional: Additional arguments for micromamba create
+
+      - name: Run tests
+        shell: bash -l {0} # Ensures the shell is properly initialized for micromamba
+        run: |
+          # The environment should be active due to init-shell and environment-name
+          # If not, you might need: micromamba activate opentargets-mcp
+          echo "Running tests in environment: $CONDA_DEFAULT_ENV"
+          # Verify micromamba is available and the environment is active
+          micromamba info
+          micromamba list
+          pytest tests/ -v
