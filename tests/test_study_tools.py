@@ -2,11 +2,7 @@
 import pytest
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.study import StudyApi
-from .conftest import TEST_DISEASE_ID_ASTHMA
-
-# Test study IDs
-TEST_STUDY_ID_1 = "GCST90002357"  # Example GWAS study
-TEST_STUDY_LOCUS_ID = "GCST90002357_1_154453788"  # Example credible set
+from .conftest import TEST_DISEASE_ID_ASTHMA, TEST_STUDY_ID, TEST_STUDY_LOCUS_ID
 
 @pytest.mark.asyncio
 class TestStudyTools:
@@ -14,11 +10,11 @@ class TestStudyTools:
     study_api = StudyApi()
 
     async def test_get_study_info(self, client: OpenTargetsClient):
-        result = await self.study_api.get_study_info(client, TEST_STUDY_ID_1)
+        result = await self.study_api.get_study_info(client, TEST_STUDY_ID)
         assert result is not None
         assert "study" in result
         if result.get("study"):
-            assert result["study"]["id"] == TEST_STUDY_ID_1
+            assert result["study"]["id"] == TEST_STUDY_ID
             assert "studyType" in result["study"]
             assert "traitFromSource" in result["study"]
 
@@ -31,7 +27,7 @@ class TestStudyTools:
             assert "rows" in result["studies"]
 
     async def test_get_study_credible_sets(self, client: OpenTargetsClient):
-        result = await self.study_api.get_study_credible_sets(client, TEST_STUDY_ID_1, page_size=1)
+        result = await self.study_api.get_study_credible_sets(client, TEST_STUDY_ID, page_size=1)
         assert result is not None
         assert "study" in result
         if result.get("study"):

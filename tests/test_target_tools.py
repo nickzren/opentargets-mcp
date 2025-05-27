@@ -2,7 +2,7 @@
 import pytest
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.target import TargetApi
-from .conftest import TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR # Import shared identifiers
+from .conftest import TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR
 
 @pytest.mark.asyncio
 class TestTargetTools:

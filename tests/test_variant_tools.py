@@ -2,10 +2,7 @@
 import pytest
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.variant import VariantApi
-
-# Test variant IDs
-TEST_VARIANT_ID_1 = "1_154453788_C_T"  # Example variant
-TEST_VARIANT_ID_2 = "17_7674220_G_A"   # TP53 variant
+from .conftest import TEST_VARIANT_ID_1
 
 @pytest.mark.asyncio
 class TestVariantTools:

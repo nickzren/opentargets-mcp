@@ -12,8 +12,8 @@ TEST_DRUG_ID_VEMURAFENIB = "CHEMBL1201583"   # Vemurafenib
 TEST_DRUG_ID_OSIMERTINIB = "CHEMBL3308093"   # Osimertinib
 TEST_VARIANT_ID_1 = "1_154453788_C_T"
 TEST_VARIANT_ID_RS699 = "rs699"             # Example rsID variant
-TEST_STUDY_ID_EXAMPLE = "GCST90002357"       # Example GWAS study
-TEST_STUDY_LOCUS_ID_EXAMPLE = "GCST004131_1_109817651" # Example credible set
+TEST_STUDY_ID = "GCST90002357"       # Example GWAS study
+TEST_STUDY_LOCUS_ID = "GCST004131_1_109817651" # Example credible set
 
 @pytest.fixture(scope="function")
 async def client():
