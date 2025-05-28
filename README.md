@@ -28,7 +28,7 @@ This server allows MCP-compatible clients (like Claude Desktop) to query and rea
 
 ### Usage
 
-#### As a Standalone Server (Primary)
+#### As a Standalone Server
 
 The main goal of this project is to run the MCP server. Once your environment is active, you can start the server with its installed command:
 ```bash
@@ -37,28 +37,22 @@ opentargets-mcp
 
 This server can be connected to any MCP client. For example, to connect to Claude Desktop, you would configure it to use the full path to this command, which you can find by running `which opentargets-mcp`.
 
-#### Configuring Claude Desktop
+#### Automated Configuration for Claude Desktop
 
-1. **Locate the configuration file** (macOS default):
+To automatically configure Claude Desktop to use this server, you can run the provided setup script. This script will find your Claude configuration file and add the necessary entries.
 
-   ```bash
-   open "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-   ```
+1.  **Make sure your conda/virtual environment is active.**
+    ```bash
+    mamba activate opentargets-mcp
+    ```
 
-2. **Add or merge** an entry that points Claude Desktop to your local MCP server (replace the cmd path with the one returned by `which opentargets-mcp`):
+2.  **Run the configuration script:**
+    ```bash
+    python scripts/configure_claude.py
+    ```
 
-   ```json
-   {
-     "mcpServers": {
-       "opentargets-mcp": {
-         "command": "/Users/<you>/miniconda3/envs/opentargets-mcp/bin/opentargets-mcp"
-       }
-     }
-   }
-   ```
-
-3. **Save** the file and **restart Claude Desktop**.  
-   The *Open Targets MCP* server will appear in the “Search and tools” menu.
+3.  **Restart Claude Desktop.**
+    The *Open Targets MCP* server will now appear in the “Search and tools” menu.
 
 #### Running the Example AI Agent
 
