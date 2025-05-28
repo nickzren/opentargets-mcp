@@ -8,12 +8,11 @@ from .target import TARGET_TOOLS, TargetApi
 from .disease import DISEASE_TOOLS, DiseaseApi
 from .drug import DRUG_TOOLS, DrugApi
 from .evidence import EVIDENCE_TOOLS, EvidenceApi
-from .search import SEARCH_TOOLS, SearchApi
+from .search import SEARCH_TOOLS, SearchApi # Simplified import
 from .variant import VARIANT_TOOLS, VariantApi
 from .study import STUDY_TOOLS, StudyApi
 
 # A comprehensive list of all available tools from all tool modules.
-# This list is used by the MCP server to announce its capabilities.
 ALL_TOOLS = (
     TARGET_TOOLS +
     DISEASE_TOOLS +
@@ -25,13 +24,12 @@ ALL_TOOLS = (
 )
 
 # A mapping from tool names (strings) to the API class that implements the tool's logic.
-# This helps the server dispatch a tool call to the correct handler method.
 API_CLASS_MAP = {
     **{tool.name: TargetApi for tool in TARGET_TOOLS},
     **{tool.name: DiseaseApi for tool in DISEASE_TOOLS},
     **{tool.name: DrugApi for tool in DRUG_TOOLS},
     **{tool.name: EvidenceApi for tool in EVIDENCE_TOOLS},
-    **{tool.name: SearchApi for tool in SEARCH_TOOLS},
+    **{tool.name: SearchApi for tool in SEARCH_TOOLS}, # Simplified mapping
     **{tool.name: VariantApi for tool in VARIANT_TOOLS},
     **{tool.name: StudyApi for tool in STUDY_TOOLS},
 }
