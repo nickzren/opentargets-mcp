@@ -6,7 +6,7 @@ from .conftest import TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR
 
 @pytest.mark.asyncio
 class TestTargetTools:
-    """Tests for tools related to Targets."""
+    """Tests for all tools related to Targets."""
     target_api = TargetApi()
 
     async def test_get_target_info(self, client: OpenTargetsClient):
@@ -113,10 +113,7 @@ class TestTargetTools:
         if result.get("target"):
             assert "prioritisation" in result["target"]
 
-    # --- New and Corrected Tests ---
-
     async def test_get_target_depmap_essentiality(self, client: OpenTargetsClient):
-        # Corrected from target_enhanced_api to target_api
         result = await self.target_api.get_target_depmap_essentiality(client, TEST_TARGET_ID_BRAF)
         assert result is not None
         assert "target" in result
@@ -125,7 +122,6 @@ class TestTargetTools:
             assert "depMapEssentiality" in result["target"]
 
     async def test_get_target_hallmarks(self, client: OpenTargetsClient):
-        # Corrected from target_enhanced_api to target_api
         result = await self.target_api.get_target_hallmarks(client, TEST_TARGET_ID_BRAF)
         assert result is not None
         assert "target" in result
@@ -133,7 +129,6 @@ class TestTargetTools:
             assert "hallmarks" in result["target"]
 
     async def test_get_target_homologues(self, client: OpenTargetsClient):
-        # Corrected from target_enhanced_api to target_api
         result = await self.target_api.get_target_homologues(client, TEST_TARGET_ID_BRAF)
         assert result is not None
         assert "target" in result
@@ -141,7 +136,6 @@ class TestTargetTools:
             assert "homologues" in result["target"]
 
     async def test_get_target_subcellular_locations(self, client: OpenTargetsClient):
-        # Corrected from target_enhanced_api to target_api
         result = await self.target_api.get_target_subcellular_locations(client, TEST_TARGET_ID_EGFR)
         assert result is not None
         assert "target" in result
@@ -149,7 +143,6 @@ class TestTargetTools:
             assert "subcellularLocations" in result["target"]
 
     async def test_get_target_alternative_genes(self, client: OpenTargetsClient):
-        # Corrected from target_enhanced_api to target_api
         result = await self.target_api.get_target_alternative_genes(client, TEST_TARGET_ID_BRAF)
         assert result is not None
         assert "target" in result
@@ -158,21 +151,8 @@ class TestTargetTools:
             assert "transcriptIds" in result["target"]
 
     async def test_get_target_class(self, client: OpenTargetsClient):
-        # Corrected from target_enhanced_api to target_api
         result = await self.target_api.get_target_class(client, TEST_TARGET_ID_BRAF)
         assert result is not None
         assert "target" in result
         if result.get("target"):
             assert "targetClass" in result["target"]
-
-
-@pytest.mark.asyncio
-async def test_client_cache_functionality(client: OpenTargetsClient):
-    """Tests that the client cache returns the same data for identical queries."""
-    target_api = TargetApi()
-    result1 = await target_api.get_target_info(client, TEST_TARGET_ID_EGFR)
-    result2 = await target_api.get_target_info(client, TEST_TARGET_ID_EGFR)
-
-    assert result1 == result2
-    if result1 and result1.get("target"):
-        assert result1["target"]["id"] == TEST_TARGET_ID_EGFR

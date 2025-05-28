@@ -32,7 +32,6 @@ class TestDrugTools:
             assert "adverseEvents" in result["drug"]
 
     async def test_get_drug_linked_diseases(self, client: OpenTargetsClient):
-        # Corrected from drug_enhanced_api to drug_api
         result = await self.drug_api.get_drug_linked_diseases(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
@@ -43,7 +42,6 @@ class TestDrugTools:
                 assert "rows" in result["drug"]["linkedDiseases"]
 
     async def test_get_drug_linked_targets(self, client: OpenTargetsClient):
-        # Corrected from drug_enhanced_api to drug_api
         result = await self.drug_api.get_drug_linked_targets(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
@@ -51,7 +49,6 @@ class TestDrugTools:
             assert "linkedTargets" in result["drug"]
 
     async def test_get_drug_warnings(self, client: OpenTargetsClient):
-        # Corrected from drug_enhanced_api to drug_api
         result = await self.drug_api.get_drug_warnings(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
@@ -60,7 +57,6 @@ class TestDrugTools:
             assert "blackBoxWarning" in result["drug"]
 
     async def test_get_drug_cross_references(self, client: OpenTargetsClient):
-        # Corrected from drug_enhanced_api to drug_api
         result = await self.drug_api.get_drug_cross_references(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result

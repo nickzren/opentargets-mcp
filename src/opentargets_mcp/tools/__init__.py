@@ -1,7 +1,7 @@
 # src/opentargets_mcp/tools/__init__.py
 """
 This package aggregates all tool definitions and their corresponding API classes
-from the various tool modules (target, disease, drug, evidence, search, variant, study, credible_set).
+from the various tool modules (target, disease, drug, evidence, search, variant, study).
 """
 
 from .target import TARGET_TOOLS, TargetApi
