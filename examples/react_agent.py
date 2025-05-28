@@ -1,5 +1,3 @@
-# agent_app.py
-
 import json
 import os
 import sys

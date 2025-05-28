@@ -54,24 +54,39 @@ To automatically configure Claude Desktop to use this server, you can run the pr
 3.  **Restart Claude Desktop.**
     The *Open Targets MCP* server will now appear in the “Search and tools” menu.
 
-#### Running the Example AI Agent
+#### Example Scripts
+
+The `examples` directory contains scripts that demonstrate how to use the toolset.
+
+##### Interactive ReAct Agent
 
 The repository includes an example agent that demonstrates how to use the query library to build intelligent applications.
 
-1.  **Set your API credentials:** Create or update a `.env` file in the project root:
+1.  Set your API credentials: Create or update a .env file in the project root:
     ```bash
     echo "OPENAI_MODEL=gpt-4.1-mini" > .env
     echo "OPENAI_API_KEY=YOUR_API_KEY" >> .env
     ```
-2.  **Run the agent:**
+
+2.  Run the agent:
     ```bash
-    python examples/agent_app.py
+    python examples/react_agent.py
 
     --- Open Targets ReAct Agent ---
     Ask a complex question. Type 'exit' to quit.
-    
+
     > Find targets for metatropic dysplasia and see if TRPV4 is one of them.
     ```
+
+##### Example Workflow
+
+```bash
+python examples/target_validation_profile.py EGFR
+python examples/disease_to_drug.py "schizophrenia"
+python examples/drug_safety_profile.py "osimertinib"
+python examples/genetic_target_prioritization.py "inflammatory bowel disease"
+```
+
 ***
 
 ### Testing
