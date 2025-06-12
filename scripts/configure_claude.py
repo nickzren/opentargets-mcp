@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
+## scripts/configure_claude.py
 """Configure Claude Desktop to use OpenTargets MCP server."""
 
 import json
 import os
 import platform
 import sys
-import subprocess
 
 # The name of our MCP server entry
 SERVER_NAME = "opentargets"
@@ -41,43 +40,37 @@ def find_python_executable():
     """
     Finds the Python executable in the current environment.
     """
-    # First try to get Python from current environment
-    python_path = sys.executable
-    
-    # Verify it's in a conda environment
-    if "envs" in python_path and "opentargets-mcp" in python_path:
-        return python_path
-    
-    # Try to find conda and get the environment path
-    try:
-        # Get conda info
-        result = subprocess.run(
-            ["conda", "info", "--envs"], 
-            capture_output=True, 
-            text=True, 
-            check=True
-        )
+    # First check if we're in a virtual environment
+    if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        # We're in a virtual environment
+        python_path = sys.executable
         
-        # Parse output to find opentargets-mcp environment
-        for line in result.stdout.split('\n'):
-            if 'opentargets-mcp' in line and not line.startswith('#'):
-                parts = line.split()
-                if len(parts) >= 2:
-                    env_path = parts[-1]  # Last element is the path
-                    python_exe = "python.exe" if platform.system() == "Windows" else "python"
-                    python_path = os.path.join(env_path, "bin", python_exe)
-                    if platform.system() == "Windows":
-                        python_path = os.path.join(env_path, python_exe)
-                    
-                    if os.path.exists(python_path):
-                        return python_path
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
+        # Verify the environment has our package installed
+        try:
+            import opentargets_mcp
+            return python_path
+        except ImportError:
+            print("Error: opentargets-mcp package not found in the current environment.", file=sys.stderr)
+            print("Please install it with: uv pip install -e .", file=sys.stderr)
+            return None
     
-    print("Error: Could not find Python in opentargets-mcp conda environment.", file=sys.stderr)
-    print("Please activate the opentargets-mcp environment and run this script again:", file=sys.stderr)
-    print("  conda activate opentargets-mcp", file=sys.stderr)
-    print("  python scripts/configure_claude.py", file=sys.stderr)
+    # Check for .venv in the project directory (UV default)
+    venv_path = os.path.join(PROJECT_DIR, ".venv")
+    if os.path.exists(venv_path):
+        if platform.system() == "Windows":
+            python_path = os.path.join(venv_path, "Scripts", "python.exe")
+        else:
+            python_path = os.path.join(venv_path, "bin", "python")
+        
+        if os.path.exists(python_path):
+            return python_path
+    
+    print("Error: No virtual environment found.", file=sys.stderr)
+    print("Please create and activate a virtual environment:", file=sys.stderr)
+    print("  uv venv", file=sys.stderr)
+    print("  source .venv/bin/activate  # On macOS/Linux", file=sys.stderr)
+    print("  .venv\\Scripts\\activate     # On Windows", file=sys.stderr)
+    print("  uv pip install -e .", file=sys.stderr)
     return None
 
 
@@ -85,26 +78,15 @@ def test_server():
     """
     Test if the server can be started successfully.
     """
-    python_path = find_python_executable()
-    if not python_path:
-        return False
-    
-    print(f"Testing server startup...")
+    print(f"Testing server module...")
     try:
-        # Try to import the server module
-        result = subprocess.run(
-            [python_path, "-c", "import opentargets_mcp.server"],
-            capture_output=True,
-            text=True,
-            cwd=PROJECT_DIR
-        )
-        if result.returncode != 0:
-            print(f"Error: Failed to import opentargets_mcp.server", file=sys.stderr)
-            print(f"stderr: {result.stderr}", file=sys.stderr)
-            return False
-        
+        import opentargets_mcp.server
         print("✅ Server module imported successfully")
         return True
+    except ImportError as e:
+        print(f"Error: Failed to import opentargets_mcp.server: {e}", file=sys.stderr)
+        print("Please ensure the package is installed: uv pip install -e .", file=sys.stderr)
+        return False
     except Exception as e:
         print(f"Error testing server: {e}", file=sys.stderr)
         return False
@@ -127,8 +109,7 @@ def main():
     # 2. Test the server
     if not test_server():
         print("\nError: Server test failed. Please ensure all dependencies are installed:", file=sys.stderr)
-        print("  conda activate opentargets-mcp", file=sys.stderr)
-        print("  pip install -e .", file=sys.stderr)
+        print("  uv pip install -e .", file=sys.stderr)
         sys.exit(1)
     
     # 3. Find the path to the Claude config file

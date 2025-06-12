@@ -1,11 +1,7 @@
-# pyproject.toml
-
-# Defines the build system and dependencies needed to build your package.
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-# Core project metadata (PEP 621).
 [project]
 name = "opentargets-mcp"
 version = "0.1.0"
@@ -13,49 +9,24 @@ description = "MCP server for querying Open Targets GraphQL API"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
-authors = [
-    {name = "Zhong Ren", email = "zhong.ren@hotmail.com"}
-]
-# Core dependencies required for the package to run.
+authors = [{name = "Zhong Ren", email = "zhong.ren@hotmail.com"}]
 dependencies = [
-    "mcp>=1.0.0",
-    "aiohttp>=3.9.0",
-]
-
-# Optional dependencies, grouped by purpose.
-[project.optional-dependencies]
-# Dependencies for development and testing
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-]
-# Dependencies specifically for the example AI agent
-agent = [
+    "mcp",
+    "aiohttp",
+    "pytest",
+    "pytest-asyncio",
+    "black",
+    "ruff",
     "openai",
     "python-dotenv",
+    "thefuzz",
 ]
 
-# Defines the command-line script that will be created upon installation.
 [project.scripts]
 opentargets-mcp = "opentargets_mcp.server:main"
 
-# Tells setuptools where to find your package source code.
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Configuration for the Black code formatter.
-[tool.black]
-line-length = 88
-target-version = ["py312"]
-
-# Configuration for the Ruff linter.
-[tool.ruff]
-line-length = 88
-select = ["E", "F", "W", "B", "I"]
-ignore = ["E501"]
-
-# Configuration for pytest.
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
