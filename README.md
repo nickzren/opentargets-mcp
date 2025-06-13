@@ -11,7 +11,6 @@ A standalone Model Context Protocol (MCP) server that exposes the Open Targets P
 
 2. **Setup**
    ```bash
-   git clone https://github.com/nickzren/opentargets-mcp.git
    cd opentargets-mcp
    uv venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
