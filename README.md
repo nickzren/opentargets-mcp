@@ -47,8 +47,6 @@ MCPM is a package manager for MCP servers that simplifies installation and confi
 pip install mcpm
 ```
 
-This works on Windows, macOS, and Linux.
-
 ### 3. Setup the MCP Server
 ```bash
 cd opentargets-mcp
