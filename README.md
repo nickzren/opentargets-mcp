@@ -2,6 +2,31 @@
 
 A Model Context Protocol (MCP) server that exposes the Open Targets Platform GraphQL API as a set of tools for use with Claude Desktop and other MCP-compatible clients.
 
+## Features
+
+### Core Capabilities
+
+- **Target Analysis**: Search genes/proteins by Ensembl ID or symbol. Access expression data, genetic constraints, pathways, protein interactions, safety profiles, and mouse phenotypes
+- **Disease Analysis**: Query diseases by EFO ID. Find associated targets, phenotypes (HPO), and research projects
+- **Drug Discovery**: Search drugs by ChEMBL ID. Access safety data, adverse events, indications, and mechanism of action
+- **Evidence Mining**: Explore target-disease associations with scored evidence from multiple sources
+- **Variant Analysis**: Query genetic variants, GWAS credible sets, and pharmacogenomics data
+- **Study Exploration**: Access GWAS studies with L2G predictions and fine-mapped loci
+- **Smart Search**: Entity resolution with synonym handling, autocomplete, and ID mapping
+
+### Data Sources
+
+The Open Targets Platform integrates evidence from 22+ primary data sources:
+
+- **Genetics**: Open Targets Genetics, ClinVar, UK Biobank, FinnGen, Gene2Phenotype, Orphanet, COSMIC
+- **Functional**: CRISPR screens, DepMap, GeneBass
+- **Drugs**: ChEMBL, FDA/EMA approvals, chemical probes
+- **Expression**: GTEx, Human Protein Atlas, Expression Atlas
+- **Pathways**: Reactome, Signor, IntAct
+- **Literature**: Europe PMC text mining
+- **Safety**: FAERS, pharmacogenomics data
+- **Models**: Mouse (MGI, IMPC) phenotypes
+
 ## Prerequisites
 
 - Python 3.12+ with pip
