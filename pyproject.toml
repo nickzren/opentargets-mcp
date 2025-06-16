@@ -1,15 +1,7 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "opentargets-mcp"
 version = "0.1.0"
-description = "MCP server for querying Open Targets GraphQL API"
-readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
-authors = [{name = "Zhong Ren", email = "zhong.ren@hotmail.com"}]
 dependencies = [
     "mcp",
     "aiohttp",
@@ -22,8 +14,9 @@ dependencies = [
     "thefuzz",
 ]
 
-[project.scripts]
-opentargets-mcp = "opentargets_mcp.server:main"
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]

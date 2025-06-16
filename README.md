@@ -50,9 +50,7 @@ pip install mcpm
 ### 3. Setup the MCP Server
 ```bash
 cd opentargets-mcp
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e .
+uv sync
 ```
 
 ### 4. Add the Server to Claude Desktop
@@ -63,18 +61,9 @@ cd opentargets-mcp
 # Set Claude as the target client
 mcpm target set @claude-desktop
 
-# Get the full Python path from your virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-PYTHON_PATH=$(which python)
-
-# On Windows (PowerShell):
-# .venv\Scripts\activate
-# $PYTHON_PATH = (Get-Command python).Path
-
-# Add the OpenTargets MCP server
+# Add the OpenTargets MCP server using the Python from uv's environment
 mcpm import stdio opentargets \
-  --command "$PYTHON_PATH" \
+  --command "$(uv run which python)" \
   --args "-m opentargets_mcp.server"
 ```
 Then restart Claude Desktop.
@@ -83,15 +72,15 @@ Then restart Claude Desktop.
 
 ### Running the Server Standalone
 ```bash
-opentargets-mcp
+uv run python -m opentargets_mcp.server
 ```
 
 ### Example Scripts
 ```bash
-python examples/target_validation_profile.py EGFR
-python examples/disease_to_drug.py "schizophrenia"
-python examples/drug_safety_profile.py "osimertinib"
-python examples/genetic_target_prioritization.py "inflammatory bowel disease"
+uv run python examples/target_validation_profile.py EGFR
+uv run python examples/disease_to_drug.py "schizophrenia"
+uv run python examples/drug_safety_profile.py "osimertinib"
+uv run python examples/genetic_target_prioritization.py "inflammatory bowel disease"
 ```
 
 ### AI Agent Example
@@ -100,12 +89,12 @@ python examples/genetic_target_prioritization.py "inflammatory bowel disease"
 echo "OPENAI_API_KEY=your_key_here" > .env
 
 # Run agent
-python examples/react_agent.py
+uv run python examples/react_agent.py
 ```
 
 ## Development
 
 ```bash
 # Run tests
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
