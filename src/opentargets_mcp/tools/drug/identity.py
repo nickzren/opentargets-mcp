@@ -80,7 +80,7 @@ class DrugIdentityApi:
                 synonyms
                 crossReferences {
                     source
-                    reference
+                    ids
                 }
                 parentMolecule {
                     id
