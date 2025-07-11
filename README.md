@@ -27,6 +27,40 @@ The Open Targets Platform integrates evidence from 22+ primary data sources:
 - **Safety**: FAERS, pharmacogenomics data
 - **Models**: Mouse (MGI, IMPC) phenotypes
 
+## Architecture
+
+```mermaid
+graph LR
+    subgraph "Clients"
+        A[Claude Desktop]
+        B[Python Scripts]
+        C[AI Agents]
+    end
+    
+    subgraph "MCP Server"
+        D[Open Targets<br/>MCP Server]
+        E[Tool Categories<br/>Target • Disease • Drug<br/>Evidence • Search • Variant • Study]
+    end
+    
+    subgraph "Open Targets"
+        F[GraphQL API]
+        G[22+ Data Sources]
+    end
+    
+    A <-->|MCP Protocol| D
+    B <-->|Direct API| D
+    C <-->|Function Calls| D
+    D <-->|GraphQL| F
+    F <--> G
+    
+    E --> D
+    
+    style D fill:#e1f5fe
+    style F fill:#fff3e0
+```
+
+The MCP server acts as a bridge between client applications and the Open Targets Platform. It translates tool calls into GraphQL queries and provides structured access to biomedical data from 22+ integrated sources.
+
 ## Prerequisites
 
 - Python 3.12+ with pip
@@ -84,6 +118,11 @@ uv run python examples/genetic_target_prioritization.py "inflammatory bowel dise
 ```
 
 ### AI Agent Example
+
+The ReAct Agent provides an interactive terminal interface for exploring Open Targets data:
+
+![Open Targets React Agent Demo](docs/screenshots/react-agent-demo.png)
+
 ```bash
 # Create .env file with your OpenAI API key
 echo "OPENAI_API_KEY=your_key_here" > .env
@@ -91,6 +130,8 @@ echo "OPENAI_API_KEY=your_key_here" > .env
 # Run agent
 uv run python examples/react_agent.py
 ```
+
+The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biomedical queries into steps, making it easy to explore drug targets, diseases, and their relationships.
 
 ## Development
 
