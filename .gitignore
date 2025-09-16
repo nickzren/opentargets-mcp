@@ -51,3 +51,5 @@ Thumbs.db
 *.log
 .cache/
 uv.lock
+.mcpregistry_registry_token
+.mcpregistry_github_token

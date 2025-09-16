@@ -1,12 +1,13 @@
 # Open Targets MCP Server
 
 [![CI](https://img.shields.io/github/actions/workflow/status/nickzren/opentargets-mcp/ci.yml?label=CI)](https://github.com/nickzren/opentargets-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-Pytest-0A9EDC?logo=pytest)](tests/)
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-Server-00ADD8?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMyA3VjE3TDEyIDIyTDIxIDE3VjdMMTIgMloiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4=)](https://github.com/modelcontextprotocol)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/servers/io.github.nickzren/opentargets)
 [![Open Targets](https://img.shields.io/badge/Open%20Targets-Platform-5C85DE)](https://platform.opentargets.org/)
-[![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-Pytest-0A9EDC?logo=pytest)](tests/)
 [![Docs](https://img.shields.io/badge/Docs-Available-blue)](README.md)
+[![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](LICENSE)
 
 A Model Context Protocol (MCP) server that exposes the Open Targets Platform GraphQL API as a set of tools for use with Claude Desktop and other MCP-compatible clients.
 
