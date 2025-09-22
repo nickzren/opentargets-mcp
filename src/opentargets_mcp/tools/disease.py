@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to 'Disease' entities in Open Targets.
 """
 from typing import Any, Dict, Optional
-import mcp.types as types
 from ..queries import OpenTargetsClient # Relative import
 
 class DiseaseApi:
@@ -131,50 +130,3 @@ class DiseaseApi:
         """
         return await client._query(graphql_query, {"efoId": efo_id})
 
-
-DISEASE_TOOLS = [
-    types.Tool(
-        name="get_disease_info",
-        description="Get detailed information about a specific disease by its EFO ID (e.g., EFO_0000270 for asthma).",
-        inputSchema={
-            "type": "object",
-            "properties": {"efo_id": {"type": "string", "description": "EFO ID of the disease."}},
-            "required": ["efo_id"]
-        }
-    ),
-    types.Tool(
-        name="get_disease_associated_targets",
-        description="Get targets associated with a specific disease.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "efo_id": {"type": "string", "description": "EFO ID of the disease."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["efo_id"]
-        }
-    ),
-    types.Tool(
-        name="get_disease_phenotypes",
-        description="Get HPO (Human Phenotype Ontology) phenotype annotations for a disease.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "efo_id": {"type": "string", "description": "EFO ID of the disease."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["efo_id"]
-        }
-    ),
-    types.Tool(
-        name="get_disease_otar_projects",
-        description="Get OTAR (Open Targets Associated Research) projects related to a disease.",
-        inputSchema={
-            "type": "object",
-            "properties": {"efo_id": {"type": "string", "description": "EFO ID of the disease."}},
-            "required": ["efo_id"]
-        }
-    )
-]

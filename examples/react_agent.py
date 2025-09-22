@@ -1,3 +1,4 @@
+import inspect
 import json
 import os
 import sys
@@ -13,7 +14,35 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 
 from opentargets_mcp.queries import OpenTargetsClient
-from opentargets_mcp.tools import ALL_TOOLS
+from opentargets_mcp.server import mcp
+from opentargets_mcp.tools.disease import DiseaseApi
+from opentargets_mcp.tools.drug import DrugApi
+from opentargets_mcp.tools.evidence import EvidenceApi
+from opentargets_mcp.tools.meta import MetaApi
+from opentargets_mcp.tools.search import SearchApi
+from opentargets_mcp.tools.study import StudyApi
+from opentargets_mcp.tools.target import TargetApi
+from opentargets_mcp.tools.variant import VariantApi
+
+_API_INSTANCES = (
+    TargetApi(),
+    DiseaseApi(),
+    DrugApi(),
+    EvidenceApi(),
+    SearchApi(),
+    VariantApi(),
+    StudyApi(),
+    MetaApi(),
+)
+
+TOOL_DISPATCH = {}
+for api in _API_INSTANCES:
+    for attr in dir(api):
+        if attr.startswith("_"):
+            continue
+        method = getattr(api, attr)
+        if inspect.iscoroutinefunction(method):
+            TOOL_DISPATCH[attr] = method
 
 # Terminal color codes optimized for white/light backgrounds
 class Colors:
@@ -120,11 +149,10 @@ async def main():
         sys.exit(1)
 
     api_client = OpenTargetsClient()
+    await api_client._ensure_session()
     
-    try:
-        tools_json_str = json.dumps([tool.model_dump() for tool in ALL_TOOLS], indent=2) 
-    except AttributeError:
-        tools_json_str = json.dumps(ALL_TOOLS, indent=2)
+    tools = [tool.model_dump() for tool in mcp._tool_manager.list_tools()]
+    tools_json_str = json.dumps(tools, indent=2)
 
     system_prompt = f"""
 You are an expert bioinformatics assistant. Your goal is to answer the user's question by breaking it down into a series of steps. You will proceed in a loop of Thought, Action, and Observation.
@@ -203,28 +231,18 @@ After your action, the system will provide an `Observation:` with the result of 
                         final_answer = action.get("answer", "I have finished the task.")
                         print_final_answer(final_answer)
                         break
-                    
-                    from opentargets_mcp.tools import API_CLASS_MAP 
-                    
-                    if tool_name not in API_CLASS_MAP:
+                    if tool_name not in TOOL_DISPATCH:
                         history.append({"role": "user", "content": f"Observation: Invalid tool name '{tool_name}'."})
                         continue
 
-                    api_class_for_tool = API_CLASS_MAP[tool_name]
-                    api_instance_for_tool = api_class_for_tool()
+                    arguments = action.get("arguments", {})
+                    func_to_call = TOOL_DISPATCH[tool_name]
+                    observation = await func_to_call(api_client, **arguments)
 
-                    if hasattr(api_instance_for_tool, tool_name):
-                        arguments = action.get("arguments", {})
-                        
-                        func_to_call = getattr(api_instance_for_tool, tool_name)
-                        observation = await func_to_call(api_client, **arguments) 
-                        
-                        print_observation(observation)
-                        
-                        observation_str = json.dumps(observation, indent=2)
-                        history.append({"role": "user", "content": f"Observation:\n{observation_str}"})
-                    else:
-                        history.append({"role": "user", "content": f"Observation: Invalid tool name '{tool_name}'."})
+                    print_observation(observation)
+
+                    observation_str = json.dumps(observation, indent=2)
+                    history.append({"role": "user", "content": f"Observation:\n{observation_str}"})
 
                 except json.JSONDecodeError:
                     history.append({"role": "user", "content": "Observation: Error parsing action JSON."})

@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to drug safety and pharmacovigilance.
 """
 from typing import Any, Dict
-import mcp.types as types
 from ...queries import OpenTargetsClient
 
 class DrugSafetyApi:
@@ -88,38 +87,3 @@ class DrugSafetyApi:
         }
         """
         return await client._query(graphql_query, {"chemblId": chembl_id})
-
-
-DRUG_SAFETY_TOOLS = [
-    types.Tool(
-        name="get_drug_adverse_events",
-        description="Get adverse event information for a drug from FAERS and MedDRA.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["chembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_drug_pharmacovigilance",
-        description="Get pharmacovigilance data for a drug, including adverse events and withdrawal information.",
-         inputSchema={
-            "type": "object",
-            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
-            "required": ["chembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_drug_warnings",
-        description="Get detailed safety warnings for a drug including withdrawals, black box warnings, and toxicity information.",
-        inputSchema={
-            "type": "object",
-            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
-            "required": ["chembl_id"]
-        }
-    ),
-]

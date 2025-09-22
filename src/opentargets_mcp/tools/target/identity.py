@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to a target's identity and classification.
 """
 from typing import Any, Dict
-import mcp.types as types
 from ...queries import OpenTargetsClient
 
 class TargetIdentityApi:
@@ -62,33 +61,3 @@ class TargetIdentityApi:
         }
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
-
-TARGET_IDENTITY_TOOLS = [
-    types.Tool(
-        name="get_target_info",
-        description="Get detailed information about a specific target by its Ensembl ID (e.g., ENSG00000157764 for BRAF).",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_class",
-        description="Get ChEMBL target classification showing the protein family and drug target class.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_alternative_genes",
-        description="Get alternative gene identifiers and database cross-references.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-]

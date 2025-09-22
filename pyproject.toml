@@ -1,6 +1,6 @@
 [project]
 name = "opentargets-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for Open Targets Platform biomedical data access"
 authors = [{name = "Nick Ren"}]
 license = {text = "MIT"}
@@ -17,15 +17,9 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "mcp",
+    "fastmcp>=2.0.0",
     "aiohttp",
-    "pytest",
-    "pytest-asyncio",
-    "black",
-    "ruff",
-    "openai",
     "python-dotenv",
-    "thefuzz",
 ]
 
 [project.scripts]
@@ -45,3 +39,16 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[project.optional-dependencies]
+dev = [
+    "mcp",
+    "pytest",
+    "pytest-asyncio",
+    "black",
+    "ruff",
+]
+examples = [
+    "openai",
+    "thefuzz",
+]

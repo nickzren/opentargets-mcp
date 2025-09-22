@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to a target's associations.
 """
 from typing import Any, Dict, List, Optional
-import mcp.types as types
 from ...queries import OpenTargetsClient
 
 class TargetAssociationsApi:
@@ -71,97 +70,75 @@ class TargetAssociationsApi:
         additional_entity_ids: Optional[List[str]] = None,
         start_year: Optional[int] = None,
         end_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        end_month: Optional[int] = None,
         cursor: Optional[str] = None,
-        size: int = 20
+        size: Optional[int] = 20,
     ) -> Dict[str, Any]:
-        """Get literature co-occurrences for a target, optionally with other entities (diseases, drugs)."""
+        """
+        Get literature co-occurrences for a target, optionally with other entities.
+
+        The Open Targets API no longer supports server-side pagination for
+        ``literatureOcurrences``. When ``size`` is provided, this helper trims the
+        returned rows client-side to the requested length.
+        """
+
         graphql_query = """
         query TargetLiteratureOcurrences(
             $ensemblId: String!,
             $additionalIds: [String!],
             $startYear: Int,
+            $startMonth: Int,
             $endYear: Int,
+            $endMonth: Int,
             $cursor: String
         ) {
             target(ensemblId: $ensemblId) {
                 literatureOcurrences(
                     additionalIds: $additionalIds,
                     startYear: $startYear,
+                    startMonth: $startMonth,
                     endYear: $endYear,
+                    endMonth: $endMonth,
                     cursor: $cursor
                 ) {
                     count
+                    filteredCount
+                    earliestPubYear
                     cursor
                     rows {
                         pmid
                         pmcid
                         publicationDate
-                        sentences {
-                            section
-                            matches {
-                                mappedId
-                                matchedLabel
-                                matchedType
-                                startInSentence
-                                endInSentence
-                            }
-                        }
                     }
                 }
             }
         }
         """
+
         variables = {
             "ensemblId": ensembl_id,
             "additionalIds": additional_entity_ids,
             "startYear": start_year,
+            "startMonth": start_month,
             "endYear": end_year,
+            "endMonth": end_month,
             "cursor": cursor,
         }
         variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
 
-TARGET_ASSOCIATIONS_TOOLS = [
-    types.Tool(
-        name="get_target_associated_diseases",
-        description="Get diseases associated with a specific target.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_known_drugs",
-        description="Get drugs/compounds known to interact with a specific target.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "page_index": {"type": "number", "description": "Page number (default: 0). Not used by API for this endpoint.", "default": 0},
-                "page_size": {"type": "number", "description": "Results per page (default: 10). Not used by API for this endpoint.", "default": 10}
-            },
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_literature_occurrences",
-        description="Get literature co-occurrences for a target, optionally with other entities (diseases, drugs).",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "additional_entity_ids": {"type": "array", "items": {"type": "string"}, "description": "List of additional entity IDs (EFO for diseases, ChEMBL for drugs) for co-occurrence. Optional."},
-                "start_year": {"type": "integer", "description": "Filter by publication start year. Optional."},
-                "end_year": {"type": "integer", "description": "Filter by publication end year. Optional."},
-                "cursor": {"type": "string", "description": "Cursor for pagination from previous results. Optional."},
-                "size": {"type": "integer", "description": "Number of results per page (default: 20). Not used by API for this endpoint.", "default": 20}
-            },
-            "required": ["ensembl_id"]
-        }
-    ),
-]
+        result = await client._query(graphql_query, variables)
+
+        if (
+            size is not None
+            and isinstance(size, int)
+            and size >= 0
+            and result.get("target")
+        ):
+            literature = result["target"].get("literatureOcurrences")
+            if literature and isinstance(literature, dict):
+                rows = literature.get("rows")
+                if isinstance(rows, list):
+                    literature["rows"] = rows[:size]
+
+        return result

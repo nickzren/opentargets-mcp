@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to 'Evidence' linking targets and diseases.
 """
 from typing import Any, Dict, List, Optional
-import mcp.types as types
 from ..queries import OpenTargetsClient # Relative import
 
 class EvidenceApi:
@@ -140,35 +139,3 @@ class EvidenceApi:
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
 
-
-EVIDENCE_TOOLS = [
-    types.Tool(
-        name="get_target_disease_evidence",
-        description="Get evidence linking a specific target to a specific disease. Supports pagination.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "efo_id": {"type": "string", "description": "EFO ID of the disease."},
-                "datasource_ids": {"type": "array", "items": {"type": "string"}, "description": "Filter by specific datasource IDs (e.g., 'eva', 'uniprot'). Optional."},
-                "size": {"type": "number", "description": "Number of evidence items per page (default: 10).", "default": 10},
-                "cursor": {"type": "string", "description": "Cursor for pagination from a previous response. Optional."}
-            },
-            "required": ["ensembl_id", "efo_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_disease_biomarkers",
-        description="Get biomarker information from evidence linking a target to a disease. This tool returns evidence strings which may contain biomarker details.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "efo_id": {"type": "string", "description": "EFO ID of the disease."},
-                "size": {"type": "number", "description": "Number of evidence items to scan for biomarkers (default: 10).", "default": 10},
-                "cursor": {"type": "string", "description": "Cursor for pagination from a previous response. Optional."}
-            },
-            "required": ["ensembl_id", "efo_id"]
-        }
-    )
-]

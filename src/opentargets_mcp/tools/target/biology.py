@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to a target's biology.
 """
 from typing import Any, Dict, List, Optional
-import mcp.types as types
 from ...queries import OpenTargetsClient
 
 class TargetBiologyApi:
@@ -242,101 +241,3 @@ class TargetBiologyApi:
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
 
-
-TARGET_BIOLOGY_TOOLS = [
-    types.Tool(
-        name="get_target_expression",
-        description="Get RNA and protein expression data for a target across tissues.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_pathways_and_go_terms",
-        description="Get pathway (e.g., Reactome) and Gene Ontology term annotations for a target.",
-         inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "page_index": {"type": "number", "description": "Page number (default: 0). Not used by API for these endpoints.", "default": 0},
-                "page_size": {"type": "number", "description": "Results per page (default: 10). Not used by API for these endpoints.", "default": 10}
-            },
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_homologues",
-        description="Get homologous genes for a target across different species.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_subcellular_locations",
-        description="Get subcellular location information showing where the protein is found in the cell.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_genetic_constraint",
-        description="Get genetic constraint scores (e.g., gnomAD pLI, LOEUF) for a target.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_mouse_phenotypes",
-        description="Get mouse knockout phenotypes associated with a target.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "page_index": {"type": "number", "description": "Page number (default: 0). Not used by API for this endpoint.", "default": 0},
-                "page_size": {"type": "number", "description": "Results per page (default: 10). Not used by API for this endpoint.", "default": 10}
-            },
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_hallmarks",
-        description="Get cancer hallmarks associated with a target, showing its role in cancer biology.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_depmap_essentiality",
-        description="Get DepMap cancer cell line essentiality data showing if a target is essential for cell survival.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_interactions",
-        description="Get protein-protein interactions for a target.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensembl_id": {"type": "string", "description": "Ensembl ID of the target."},
-                "source_database": {"type": "string", "description": "Filter by source database (e.g., 'intact', 'reactome', 'signor'). Optional."},
-                "score_threshold": {"type": "number", "description": "Minimum interaction score threshold. Optional."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["ensembl_id"]
-        }
-    ),
-]

@@ -34,10 +34,10 @@ cd opentargets-mcp
 pip install uv
 uv sync
 
-# Import to Claude Desktop
+# Import to Claude Desktop (stdio transport)
 mcpm import stdio opentargets \
   --command "$(uv run which python)" \
-  --args "-m opentargets_mcp.server"
+  --args "-m opentargets_mcp.server --transport stdio"
 ```
 
 Then restart Claude Desktop to start using the Open Targets tools.
@@ -126,9 +126,46 @@ The MCP server acts as a bridge between client applications and the Open Targets
 # Using the convenience script (automatically handles uv setup)
 ./run.sh
 
-# Or run directly with uv
+# Or run directly with uv (stdio transport by default)
 uv run python -m opentargets_mcp.server
+
+# Specify transport explicitly
+uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 ```
+
+### Configuration
+
+- **Environment variables**: `MCP_TRANSPORT` (`stdio`, `sse`, or `http`), `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` control the transport and bind address. Defaults are `stdio`, `0.0.0.0`, and `8000`.
+- **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000` provides flexible transport selection.
+- **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
+
+### Transport Modes
+
+The server supports multiple transport protocols powered by FastMCP:
+
+#### **stdio transport** (default)
+```bash
+# For Claude Desktop (via mcpm) and local CLI tools
+opentargets-mcp --transport stdio
+```
+
+#### **SSE transport**
+```bash
+# For web-based MCP clients with Server-Sent Events
+opentargets-mcp --transport sse --host 0.0.0.0 --port 8000
+```
+
+#### **HTTP transport**
+```bash
+# For streamable HTTP MCP clients
+opentargets-mcp --transport http --host 0.0.0.0 --port 8000
+```
+
+### Using with MCP Clients
+
+- **Claude Desktop**: Use mcpm installation (stdio) or direct server connection (sse)
+- **Web MCP clients**: Use SSE or HTTP transports with public URL (tunnel required)
+- **Custom integrations**: Any transport mode depending on your client implementation
 
 ### Example Scripts
 ```bash

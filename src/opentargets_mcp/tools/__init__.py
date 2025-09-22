@@ -1,55 +1,47 @@
-# src/opentargets_mcp/tools/__init__.py
+"""Public API surfaces for Open Targets MCP tool classes.
+
+`ALL_TOOLS` and `API_CLASS_MAP` were removed in v0.2.0. FastMCP now handles tool
+registration and dispatching directly in `opentargets_mcp.server`.
 """
-This package aggregates all tool definitions and their corresponding API classes
-from the various tool modules (target, disease, drug, evidence, search, variant, study).
-"""
 
-from .target import TARGET_TOOLS, TargetApi
-from .disease import DISEASE_TOOLS, DiseaseApi
-from .drug import DRUG_TOOLS, DrugApi
-from .evidence import EVIDENCE_TOOLS, EvidenceApi
-from .search import SEARCH_TOOLS, SearchApi # Simplified import
-from .variant import VARIANT_TOOLS, VariantApi
-from .study import STUDY_TOOLS, StudyApi
+from .disease import DiseaseApi
+from .drug import DrugApi
+from .evidence import EvidenceApi
+from .meta import MetaApi
+from .search import SearchApi
+from .study import StudyApi
+from .target import TargetApi
+from .variant import VariantApi
 
-# A comprehensive list of all available tools from all tool modules.
-ALL_TOOLS = (
-    TARGET_TOOLS +
-    DISEASE_TOOLS +
-    DRUG_TOOLS +
-    EVIDENCE_TOOLS +
-    SEARCH_TOOLS +
-    VARIANT_TOOLS +
-    STUDY_TOOLS
-)
-
-# A mapping from tool names (strings) to the API class that implements the tool's logic.
-API_CLASS_MAP = {
-    **{tool.name: TargetApi for tool in TARGET_TOOLS},
-    **{tool.name: DiseaseApi for tool in DISEASE_TOOLS},
-    **{tool.name: DrugApi for tool in DRUG_TOOLS},
-    **{tool.name: EvidenceApi for tool in EVIDENCE_TOOLS},
-    **{tool.name: SearchApi for tool in SEARCH_TOOLS}, # Simplified mapping
-    **{tool.name: VariantApi for tool in VARIANT_TOOLS},
-    **{tool.name: StudyApi for tool in STUDY_TOOLS},
-}
-
-# __all__ defines the public API of this module.
 __all__ = [
-    "ALL_TOOLS",
-    "API_CLASS_MAP",
-    "TargetApi",
-    "TARGET_TOOLS",
     "DiseaseApi",
-    "DISEASE_TOOLS",
     "DrugApi",
-    "DRUG_TOOLS",
     "EvidenceApi",
-    "EVIDENCE_TOOLS",
+    "MetaApi",
     "SearchApi",
-    "SEARCH_TOOLS",
-    "VariantApi",
-    "VARIANT_TOOLS",
     "StudyApi",
-    "STUDY_TOOLS",
+    "TargetApi",
+    "VariantApi",
 ]
+
+
+def __getattr__(name: str):  # pragma: no cover - transitional guidance
+    if name == "ALL_TOOLS":
+        import warnings
+
+        warnings.warn(
+            "ALL_TOOLS is deprecated in v0.2.0. Tools are now managed by FastMCP.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return []
+    if name == "API_CLASS_MAP":
+        import warnings
+
+        warnings.warn(
+            "API_CLASS_MAP is deprecated in v0.2.0. FastMCP handles tool dispatch.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return {}
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

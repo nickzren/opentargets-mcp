@@ -3,7 +3,6 @@
 Defines API methods and MCP tools for metadata and utility functions in Open Targets.
 """
 from typing import Any, Dict, List, Optional
-import mcp.types as types
 from ..queries import OpenTargetsClient
 
 class MetaApi:
@@ -129,60 +128,3 @@ class MetaApi:
         }
         return await client._query(graphql_query, variables)
 
-
-META_TOOLS = [
-    types.Tool(
-        name="get_api_metadata",
-        description="Get Open Targets Platform API version and data version information.",
-        inputSchema={
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    ),
-    types.Tool(
-        name="get_association_datasources",
-        description="Get list of all available datasources used for target-disease associations.",
-        inputSchema={
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    ),
-    types.Tool(
-        name="get_interaction_resources",
-        description="Get list of all available protein-protein interaction databases.",
-        inputSchema={
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    ),
-    types.Tool(
-        name="get_gene_ontology_terms",
-        description="Get Gene Ontology (GO) term information by GO IDs.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "go_ids": {"type": "array", "items": {"type": "string"}, "description": "List of GO IDs (e.g., ['GO:0005515', 'GO:0008270'])."}
-            },
-            "required": ["go_ids"]
-        }
-    ),
-    types.Tool(
-        name="map_ids",
-        description="Map free text terms to Open Targets IDs. Useful for converting gene symbols, disease names, or drug names to their respective IDs.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "query_terms": {"type": "array", "items": {"type": "string"}, "description": "List of terms to map (e.g., ['BRAF', 'melanoma', 'vemurafenib'])."},
-                "entity_names": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Filter results by entity types (e.g., ['target', 'disease', 'drug']). Defaults to all."
-                }
-            },
-            "required": ["query_terms"]
-        }
-    )
-]

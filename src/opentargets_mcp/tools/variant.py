@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to 'Variant' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
-import mcp.types as types
 from ..queries import OpenTargetsClient
 
 class VariantApi:
@@ -266,60 +265,3 @@ class VariantApi:
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
 
-
-VARIANT_TOOLS = [
-    types.Tool(
-        name="get_variant_info",
-        description="Get detailed information about a specific variant by its ID (e.g., '1_154453788_C_T' or rs12345).",
-        inputSchema={
-            "type": "object",
-            "properties": {"variant_id": {"type": "string", "description": "Variant ID (CHROM_POS_REF_ALT format or rsID)."}},
-            "required": ["variant_id"]
-        }
-    ),
-    types.Tool(
-        name="get_variant_credible_sets",
-        description="Get credible sets (fine-mapping results) associated with a variant from GWAS studies.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "variant_id": {"type": "string", "description": "Variant ID (CHROM_POS_REF_ALT format or rsID)."},
-                "study_types": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Filter by study types (e.g., ['gwas', 'eqtl', 'pqtl']). Optional."
-                },
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["variant_id"]
-        }
-    ),
-    types.Tool(
-        name="get_variant_pharmacogenomics",
-        description="Get pharmacogenomics data showing how genetic variants affect drug response.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "variant_id": {"type": "string", "description": "Variant ID (CHROM_POS_REF_ALT format or rsID)."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["variant_id"]
-        }
-    ),
-    types.Tool(
-        name="get_variant_evidences",
-        description="Get all evidence (GWAS, functional, etc.) associated with a variant.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "variant_id": {"type": "string", "description": "Variant ID (CHROM_POS_REF_ALT format or rsID)."},
-                "datasource_ids": {"type": "array", "items": {"type": "string"}, "description": "Filter by specific datasource IDs. Optional."},
-                "size": {"type": "number", "description": "Number of evidence items per page (default: 10).", "default": 10},
-                "cursor": {"type": "string", "description": "Cursor for pagination from a previous response. Optional."}
-            },
-            "required": ["variant_id"]
-        }
-    )
-]

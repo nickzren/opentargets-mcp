@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to target safety and tractability.
 """
 from typing import Any, Dict
-import mcp.types as types
 from ...queries import OpenTargetsClient
 
 class TargetSafetyApi:
@@ -108,52 +107,3 @@ class TargetSafetyApi:
         }
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
-
-
-TARGET_SAFETY_TOOLS = [
-    types.Tool(
-        name="get_target_safety_information",
-        description="Get safety liabilities and information for a target.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_tractability",
-        description="Get tractability assessment for a target (antibody and small molecule).",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_chemical_probes",
-        description="Get chemical probes for target validation, including quality scores.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_tep",
-        description="Get Target Enabling Package (TEP) information for a target.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_target_prioritization",
-        description="Get target prioritization scores from various sources.",
-        inputSchema={
-            "type": "object",
-            "properties": {"ensembl_id": {"type": "string", "description": "Ensembl ID of the target."}},
-            "required": ["ensembl_id"]
-        }
-    ),
-]

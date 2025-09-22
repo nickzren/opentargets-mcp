@@ -1,141 +1,283 @@
-# src/opentargets_mcp/server.py
-import asyncio
-import json
-from typing import Any, Dict, Type
+"""FastMCP-backed server for Open Targets MCP tools."""
+from __future__ import annotations
+
+import anyio
+import functools
+import inspect
 import logging
 import os
+from contextlib import asynccontextmanager
+from typing import Any, Callable, Optional
 
-# Corrected import for stdio communication and MCP models/options
-from mcp.server import Server, InitializationOptions, NotificationOptions
-from mcp.server.stdio import stdio_server 
-import mcp.types as types
+from dotenv import load_dotenv
+from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+import mcp.types as mcp_types
 
 from .queries import OpenTargetsClient
-from .tools import ALL_TOOLS, API_CLASS_MAP
+from .tools.disease import DiseaseApi
+from .tools.drug import DrugApi
+from .tools.evidence import EvidenceApi
+from .tools.meta import MetaApi
+from .tools.search import SearchApi
+from .tools.study import StudyApi
+from .tools.target import TargetApi
+from .tools.variant import VariantApi
+from mcp.server.lowlevel.server import NotificationOptions
 
-# Configure basic logging for the server
-log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
-numeric_log_level = getattr(logging, log_level_str, logging.INFO)
-logging.basicConfig(level=numeric_log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+__all__ = [
+    "mcp",
+    "get_client",
+    "main",
+]
+
+# ---------------------------------------------------------------------------
+# Logging & environment setup
+# ---------------------------------------------------------------------------
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Client lifecycle management
+# ---------------------------------------------------------------------------
+_client: Optional[OpenTargetsClient] = None
 
-class OpenTargetsMcpServer:
-    """
-    MCP Server for Open Targets data.
-    Manages the OpenTargetsClient and dispatches tool calls to appropriate API handlers.
-    """
-    def __init__(self):
-        self.server_name = "opentargets-mcp"
-        self.server_version = "0.2.4" # Incremented version for this change
-        self.mcp_server = Server(self.server_name, self.server_version)
-        self.client = OpenTargetsClient() 
-        self._api_instances: Dict[Type, Any] = {}
-        self._setup_handlers()
-        logger.info(f"{self.server_name} v{self.server_version} initialized.")
 
-    def _setup_handlers(self):
-        """Registers MCP handlers for listing and calling tools."""
-
-        @self.mcp_server.list_tools()
-        async def handle_list_tools() -> list[types.Tool]:
-            """Returns the list of all available tools."""
-            return ALL_TOOLS
-
-        @self.mcp_server.call_tool()
-        async def handle_call_tool(
-            name: str, arguments: Dict[str, Any]
-        ) -> list[types.TextContent]:
-            """
-            Handles a tool call request from an MCP client.
-            """
-            logger.info(f"Handling call_tool request for tool: '{name}' with arguments: {arguments}")
-            try:
-                if name not in API_CLASS_MAP:
-                    logger.error(f"Unknown tool called: {name}")
-                    raise ValueError(f"Unknown tool: {name}")
-
-                api_class = API_CLASS_MAP[name]
-
-                if api_class not in self._api_instances:
-                    self._api_instances[api_class] = api_class()
-                
-                api_instance = self._api_instances[api_class]
-
-                if not hasattr(api_instance, name):
-                    logger.error(f"Tool method '{name}' not found in API class '{api_class.__name__}'")
-                    raise ValueError(f"Tool method '{name}' not found in API class '{api_class.__name__}'")
-                
-                func_to_call = getattr(api_instance, name)
-
-                result_data = await func_to_call(self.client, **arguments)
-                
-                result_json = json.dumps(result_data, indent=2)
-                
-                return [types.TextContent(type="text", text=result_json)]
-
-            except Exception as e:
-                logger.error(f"Error calling tool '{name}': {str(e)}", exc_info=True)
-                error_response = {
-                    "error": type(e).__name__,
-                    "message": str(e),
-                    "tool_name": name
-                }
-                return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
-        
-        # Removed @self.mcp_server.on_shutdown() decorator and handle_shutdown method
-        # as 'on_shutdown' is not an attribute of the Server object in the user's mcp library version.
-        # Client cleanup will be handled by the finally block in main().
-
-    async def run(self):
-        """Starts the MCP server and listens for requests using stdio."""
-        logger.info(f"Starting {self.server_name} v{self.server_version}...")
-        
-        init_options = InitializationOptions(
-            server_name=self.server_name,             # Added server_name
-            server_version=self.server_version,       # Added server_version
-            capabilities=self.mcp_server.get_capabilities(
-                notification_options=NotificationOptions(), 
-                experimental_capabilities={}
-            )
+def get_client() -> OpenTargetsClient:
+    """Return the active OpenTargetsClient or raise if not initialised."""
+    if _client is None:
+        raise RuntimeError(
+            "OpenTargetsClient not initialised. Tools must be called through the "
+            "running MCP server."
         )
-        # Use the stdio_server context manager for handling read/write streams
-        async with stdio_server() as (read_stream, write_stream):
-            await self.mcp_server.run(read_stream, write_stream, init_options)
+    return _client
 
 
-def main():
-    """Main entry point to run the Open Targets MCP Server."""
-    server = OpenTargetsMcpServer()
+@asynccontextmanager
+async def lifespan(server: FastMCP):
+    """Initialise and clean up shared resources for FastMCP."""
+    global _client
+
+    logger.info("Starting Open Targets MCP server")
+    _client = OpenTargetsClient()
+    await _client._ensure_session()
+
     try:
-        asyncio.run(server.run())
-    except KeyboardInterrupt:
-        logger.info("Server interrupted by user. Shutting down.")
-    except Exception as e: # Catch other potential exceptions during server run
-        logger.error(f"Server encountered an unhandled exception: {e}", exc_info=True)
+        yield
     finally:
-        # This block ensures the client is closed if the server stops for any reason.
-        logger.info("Performing final cleanup...")
-        if server.client and server.client.session and not server.client.session.closed:
-             logger.info("Closing OpenTargetsClient session in main's finally block.")
-             try:
-                 # Try to get the current running loop if available
-                 loop = asyncio.get_event_loop_policy().get_event_loop()
-                 if loop.is_running() and not loop.is_closed():
-                     # If a loop is running and not closed, schedule close on it
-                     asyncio.ensure_future(server.client.close(), loop=loop)
-                 else:
-                     # If no loop is running or it's closed, run a new one for cleanup
-                     asyncio.run(server.client.close())
-             except RuntimeError: 
-                 # Fallback if get_event_loop() fails or other asyncio issues
-                 logger.warning("Could not get running loop for client cleanup, attempting direct asyncio.run.")
-                 asyncio.run(server.client.close())
-             logger.info("OpenTargetsClient session cleanup attempted.")
+        if _client is not None:
+            await _client.close()
+            _client = None
+            logger.info("Open Targets MCP server shut down cleanly")
+
+
+# ---------------------------------------------------------------------------
+# FastMCP initialisation
+# ---------------------------------------------------------------------------
+mcp = FastMCP(
+    name="opentargets",
+    version="0.2.0",
+    lifespan=lifespan,
+)
+
+_target_api = TargetApi()
+_disease_api = DiseaseApi()
+_drug_api = DrugApi()
+_evidence_api = EvidenceApi()
+_search_api = SearchApi()
+_variant_api = VariantApi()
+_study_api = StudyApi()
+_meta_api = MetaApi()
+
+
+def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap an API coroutine so the shared client is injected automatically."""
+
+    @functools.wraps(method)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        client = get_client()
+        return await method(client, *args, **kwargs)
+
+    signature = inspect.signature(method)
+    params = list(signature.parameters.values())[1:]
+    wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
+    return wrapper
+
+
+def register_all_api_methods() -> None:
+    """Register every coroutine defined on the API mixins as FastMCP tools."""
+    api_instances = (
+        _target_api,
+        _disease_api,
+        _drug_api,
+        _evidence_api,
+        _search_api,
+        _variant_api,
+        _study_api,
+        _meta_api,
+    )
+
+    for api in api_instances:
+        for name in dir(api):
+            if name.startswith("_"):
+                continue
+            method = getattr(api, name)
+            if not inspect.iscoroutinefunction(method):
+                continue
+            if name in getattr(mcp._tool_manager, "_tools", {}):
+                logger.debug("Tool already registered: %s", name)
+                continue
+            wrapper = _make_tool_wrapper(method)
+            mcp.tool(name=name)(wrapper)
+            logger.debug("Registered tool: %s", name)
+
+
+register_all_api_methods()
+
+
+# ---------------------------------------------------------------------------
+# Deprecated module-level guidance
+# ---------------------------------------------------------------------------
+
+def __getattr__(name: str) -> Any:  # pragma: no cover - guidance only
+    if name == "ALL_TOOLS":
+        raise AttributeError(
+            "ALL_TOOLS has been removed in v0.2.0. Use FastMCP list_tools instead."
+        )
+    if name == "API_CLASS_MAP":
+        raise AttributeError(
+            "API_CLASS_MAP has been removed in v0.2.0. Tool dispatch is handled by FastMCP."
+        )
+    raise AttributeError(name)
+
+
+# ---------------------------------------------------------------------------
+# Discovery endpoint for HTTP/SSE transports
+# ---------------------------------------------------------------------------
+
+
+@mcp.custom_route("/.well-known/mcp.json", methods=["GET"], include_in_schema=False)
+async def discovery_endpoint(request: Request) -> JSONResponse:
+    """Expose MCP discovery metadata for HTTP/SSE clients."""
+
+    base_url = str(request.base_url).rstrip("/")
+    sse_path = mcp._deprecated_settings.sse_path.lstrip("/")
+    message_path = mcp._deprecated_settings.message_path.lstrip("/")
+    http_path = mcp._deprecated_settings.streamable_http_path.lstrip("/")
+
+    capabilities = mcp._mcp_server.get_capabilities(
+        NotificationOptions(),
+        experimental_capabilities={}
+    )
+
+    transports: dict[str, dict[str, str]] = {
+        "sse": {
+            "url": f"{base_url}/{sse_path}",
+            "messageUrl": f"{base_url}/{message_path}",
+        }
+    }
+
+    transports["http"] = {
+        "url": f"{base_url}/{http_path}",
+    }
+
+    discovery = {
+        "protocolVersion": mcp_types.LATEST_PROTOCOL_VERSION,
+        "server": {
+            "name": mcp._mcp_server.name,
+            "version": mcp._mcp_server.version,
+            "instructions": mcp._mcp_server.instructions,
+        },
+        "capabilities": capabilities.model_dump(mode="json"),
+        "transports": transports,
+    }
+
+    return JSONResponse(discovery)
+
+
+@mcp.custom_route("/", methods=["GET"], include_in_schema=False)
+async def root_health(_: Request) -> JSONResponse:
+    """Simple health check endpoint."""
+
+    return JSONResponse({"status": "ok"})
+
+
+@mcp.custom_route(mcp._deprecated_settings.sse_path, methods=["POST"], include_in_schema=False)
+async def sse_message_fallback(_: Request) -> Response:
+    """Gracefully handle clients that POST to the SSE endpoint."""
+
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Open Targets MCP Server",
+        epilog="Environment overrides: MCP_TRANSPORT, FASTMCP_SERVER_HOST, FASTMCP_SERVER_PORT",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "http"],
+        default=os.getenv("MCP_TRANSPORT", "stdio"),
+        help="Transport protocol to expose (stdio, sse, or http)",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.getenv("FASTMCP_SERVER_HOST", "0.0.0.0"),
+        help="Host for SSE transport (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("FASTMCP_SERVER_PORT", "8000")),
+        help="Port for SSE transport (default: 8000)",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose (DEBUG level) logging",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.transport in {"sse", "http"}:
+        os.environ["FASTMCP_SERVER_HOST"] = args.host
+        os.environ["FASTMCP_SERVER_PORT"] = str(args.port)
+        if hasattr(mcp, "settings"):
+            mcp.settings.host = args.host  # type: ignore[attr-defined]
+            mcp.settings.port = args.port  # type: ignore[attr-defined]
+        logger.info("Configured %s host=%s port=%s", args.transport.upper(), args.host, args.port)
+
+    logger.info(
+        "Starting Open Targets MCP server (transport=%s, host=%s, port=%s)",
+        args.transport,
+        args.host,
+        args.port,
+    )
+
+    try:
+        if args.transport == "http":
+            async def run_http():
+                await mcp.run_http_async(host=args.host, port=args.port)
+
+            anyio.run(run_http)
         else:
-            logger.info("OpenTargetsClient session was already closed or not initialized.")
-        logger.info("Server shutdown complete.")
+            mcp.run(transport=args.transport)
+    except KeyboardInterrupt:  # pragma: no cover - user interaction
+        logger.info("Server interrupted by user")
+    except Exception:  # pragma: no cover - unexpected runtime failure
+        logger.exception("Server encountered an unrecoverable error")
+        raise
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

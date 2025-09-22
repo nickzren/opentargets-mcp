@@ -5,7 +5,6 @@ across multiple entity types in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 import asyncio
-import mcp.types as types
 from ..queries import OpenTargetsClient
 from .meta import MetaApi
 
@@ -218,70 +217,3 @@ class SearchApi:
         }
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
-
-SEARCH_TOOLS = [
-    types.Tool(
-        name="search_entities",
-        description="Search for targets, diseases, or drugs. Automatically handles synonyms and common misspellings to find the best match.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "query_string": {"type": "string", "description": "The name, symbol, or synonym of the entity to search for (e.g., 'ERBB1', 'asthma', 'vemurafenib')."},
-                "entity_names": {
-                    "type": "array", "items": {"type": "string"},
-                    "description": "Optional list to filter by entity type (e.g., ['target', 'disease'])."
-                },
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["query_string"]
-        }
-    ),
-    types.Tool(
-        name="search_suggestions",
-        description="Get autocomplete suggestions for a partial query string (at least 3 characters).",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "query_prefix": {"type": "string", "description": "The partial search term (e.g., 'vemu' for 'vemurafenib')."},
-                "entity_names": {
-                    "type": "array", "items": {"type": "string"},
-                    "description": "List of entity types to search (e.g., ['drug']). Defaults to all."
-                },
-                "max_suggestions": {"type": "number", "description": "Maximum number of suggestions to return (default: 10).", "default": 10}
-            },
-            "required": ["query_prefix"]
-        }
-    ),
-    types.Tool(
-        name="get_similar_targets",
-        description="Get targets similar to a given target Ensembl ID based on shared associations.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "entity_id": {"type": "string", "description": "Ensembl ID of the target to find similar entities for."},
-                "threshold": {"type": "number", "description": "Minimum similarity score (0.0 to 1.0). Optional, defaults to 0.5.", "default": 0.5},
-                "size": {"type": "number", "description": "Number of similar entities to return (default: 10).", "default": 10}
-            },
-            "required": ["entity_id"]
-        }
-    ),
-    types.Tool(
-        name="search_facets",
-        description="Get search facets (aggregations/filters) based on an optional query string and entity types.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "query_string": {"type": "string", "description": "Optional query string to base facets on. Use '*' for broad facets."},
-                "category_id": {"type": "string", "description": "Specific facet category to retrieve. Optional."},
-                "entity_names": {
-                    "type": "array", "items": {"type": "string"},
-                    "description": "List of entity types to consider for facets. Defaults to all."
-                },
-                "page_index": {"type": "number", "description": "Page number for facet hits (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of facet hits per page (default: 20).", "default": 20}
-            },
-            "required": []
-        }
-    )
-]

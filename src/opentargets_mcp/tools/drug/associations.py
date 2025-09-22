@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to a drug's associations with other entities.
 """
 from typing import Any, Dict
-import mcp.types as types
 from ...queries import OpenTargetsClient
 
 class DrugAssociationsApi:
@@ -58,25 +57,3 @@ class DrugAssociationsApi:
         }
         """
         return await client._query(graphql_query, {"chemblId": chembl_id})
-
-
-DRUG_ASSOCIATIONS_TOOLS = [
-    types.Tool(
-        name="get_drug_linked_diseases",
-        description="Get all diseases linked to a drug through approved indications or clinical trials.",
-        inputSchema={
-            "type": "object",
-            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
-            "required": ["chembl_id"]
-        }
-    ),
-    types.Tool(
-        name="get_drug_linked_targets",
-        description="Get all molecular targets linked to a drug based on its mechanism of action.",
-        inputSchema={
-            "type": "object",
-            "properties": {"chembl_id": {"type": "string", "description": "ChEMBL ID of the drug."}},
-            "required": ["chembl_id"]
-        }
-    ),
-]

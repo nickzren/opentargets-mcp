@@ -3,7 +3,6 @@
 Defines API methods and MCP tools related to 'Study' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
-import mcp.types as types
 from ..queries import OpenTargetsClient
 
 class StudyApi:
@@ -268,52 +267,3 @@ class StudyApi:
         """
         return await client._query(graphql_query, {"studyLocusId": study_locus_id})
 
-
-STUDY_TOOLS = [
-    types.Tool(
-        name="get_study_info",
-        description="Get detailed information about a specific GWAS study by its ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {"study_id": {"type": "string", "description": "Study ID (e.g., 'GCST90002357')."}},
-            "required": ["study_id"]
-        }
-    ),
-    types.Tool(
-        name="get_studies_by_disease",
-        description="Get GWAS studies associated with specific diseases.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "disease_ids": {"type": "array", "items": {"type": "string"}, "description": "List of EFO disease IDs."},
-                "enable_indirect": {"type": "boolean", "description": "Include studies for disease descendants (default: false).", "default": False},
-                "study_id": {"type": "string", "description": "Filter by specific study ID. Optional."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["disease_ids"]
-        }
-    ),
-    types.Tool(
-        name="get_study_credible_sets",
-        description="Get fine-mapped credible sets from a GWAS study.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "study_id": {"type": "string", "description": "Study ID (e.g., 'GCST90002357')."},
-                "page_index": {"type": "number", "description": "Page number for results (default: 0).", "default": 0},
-                "page_size": {"type": "number", "description": "Number of results per page (default: 10).", "default": 10}
-            },
-            "required": ["study_id"]
-        }
-    ),
-    types.Tool(
-        name="get_credible_set_by_id",
-        description="Get detailed information about a specific credible set including L2G predictions.",
-        inputSchema={
-            "type": "object",
-            "properties": {"study_locus_id": {"type": "string", "description": "Study-locus ID for the credible set."}},
-            "required": ["study_locus_id"]
-        }
-    )
-]
