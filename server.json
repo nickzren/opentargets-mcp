@@ -3,7 +3,7 @@
   "name": "io.github.nickzren/opentargets",
   "description": "Open Targets MCP server for targets, diseases, drugs, variants, and evidence",
   "status": "active",
-  "websiteUrl": "https://github.com/nickzren/opentargets-mcp",
+  "websiteUrl": "https://nickzren.github.io/opentargets-mcp/",
   "repository": {
     "url": "https://github.com/nickzren/opentargets-mcp",
     "source": "github",
