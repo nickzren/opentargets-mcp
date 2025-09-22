@@ -1,9 +1,9 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
   "name": "io.github.nickzren/opentargets",
   "description": "Open Targets MCP server for targets, diseases, drugs, variants, and evidence",
   "status": "active",
-  "website_url": "https://github.com/nickzren/opentargets-mcp",
+  "websiteUrl": "https://github.com/nickzren/opentargets-mcp",
   "repository": {
     "url": "https://github.com/nickzren/opentargets-mcp",
     "source": "github",
@@ -12,8 +12,8 @@
   "version": "0.2.0",
   "packages": [
     {
-      "registry_type": "pypi",
-      "registry_base_url": "https://pypi.org",
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
       "identifier": "opentargets-mcp",
       "version": "0.2.0",
       "transport": {
