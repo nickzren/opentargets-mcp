@@ -19,7 +19,40 @@ class EvidenceApi:
         size: int = 10,
         cursor: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Get evidence linking a specific target to a specific disease."""
+        """Retrieve evidence strings linking a target to a disease.
+
+        **When to use**
+        - Audit the individual evidence components supporting a target–disease association
+        - Filter results by datasource to focus on genetic, literature, or clinical sources
+        - Implement paginated evidence views within conversational agents
+
+        **When not to use**
+        - Summarising association scores only (see target/disease association tools)
+        - Exploring biomarkers specifically (use `get_target_disease_biomarkers`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client instance.
+        - `ensembl_id` (`str`): Target identifier (`"ENSG..."`).
+        - `efo_id` (`str`): Disease identifier (`"EFO..."`/`"MONDO..."`).
+        - `datasource_ids` (`Optional[List[str]]`): Restrict to specific datasource IDs (e.g., `["eva", "ot_crispr"]`).
+        - `size` (`int`): Maximum evidence rows to return per page (default 10).
+        - `cursor` (`Optional[str]`): Cursor token from a previous call for pagination.
+
+        **Returns**
+        - `Dict[str, Any]`: `{"target": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "datasourceId": str, "datatypeId": str, ...}], ...}}}`.
+
+        **Errors**
+        - Propagates GraphQL and network exceptions from `OpenTargetsClient`.
+
+        **Example**
+        ```python
+        evidence_api = EvidenceApi()
+        evidences = await evidence_api.get_target_disease_evidence(
+            client, "ENSG00000157764", "EFO_0003884", datasource_ids=["eva"], size=5
+        )
+        print(len(evidences["target"]["evidences"]["rows"]))
+        ```
+        """
         # Note: The API structures evidence under the 'target' or 'disease' object.
         # This function queries via the 'target' object.
         graphql_query = """
@@ -80,7 +113,39 @@ class EvidenceApi:
         size: int = 10, # Number of evidence strings to check for biomarkers
         cursor: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Get biomarker information from evidence linking a target to a disease."""
+        """Inspect evidence for biomarker annotations linking a target and disease.
+
+        **When to use**
+        - Highlight biomarker candidates referenced within clinical or literature evidence
+        - Provide conversational answers about biomarkers associated with a therapeutic hypothesis
+        - Explore biomarker metadata before diving into datasource-specific payloads
+
+        **When not to use**
+        - General evidence retrieval without biomarker focus (use `get_target_disease_evidence`)
+        - Requesting structured biomarker ontologies (not all evidence types expose dedicated fields)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `ensembl_id` (`str`): Target Ensembl ID.
+        - `efo_id` (`str`): Disease identifier.
+        - `size` (`int`): Maximum evidence strings per page (default 10).
+        - `cursor` (`Optional[str]`): Pagination cursor from a previous response.
+
+        **Returns**
+        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "cursor": str}}}`. Presence of biomarker fields depends on datasource.
+
+        **Errors**
+        - GraphQL and transport errors propagate from `OpenTargetsClient`.
+
+        **Example**
+        ```python
+        evidence_api = EvidenceApi()
+        biomarker_rows = await evidence_api.get_target_disease_biomarkers(
+            client, "ENSG00000157764", "EFO_0003884", size=5
+        )
+        print(biomarker_rows["target"]["evidences"]["rows"][0].get("biomarkerName"))
+        ```
+        """
         # Biomarkers are often part of the evidence strings.
         # The query provided by Claude looks for 'biomarkerName' and 'biomarkers' within evidence.
         graphql_query = """
@@ -138,4 +203,3 @@ class EvidenceApi:
         }
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
-

@@ -7,7 +7,7 @@ import inspect
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Callable, Optional
+from typing import Any, Callable, NamedTuple, Optional
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -92,6 +92,23 @@ _study_api = StudyApi()
 _meta_api = MetaApi()
 
 
+class _ToolDocMetadata(NamedTuple):
+    title: str | None
+    description: str | None
+
+
+def _extract_tool_doc_metadata(method: Callable[..., Any]) -> _ToolDocMetadata:
+    """Convert a method docstring into FastMCP metadata."""
+    doc = inspect.getdoc(method)
+    if not doc:
+        return _ToolDocMetadata(title=None, description=None)
+
+    lines = doc.splitlines()
+    summary = lines[0].strip() if lines else None
+    description = doc.strip()
+    return _ToolDocMetadata(title=summary, description=description)
+
+
 def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap an API coroutine so the shared client is injected automatically."""
 
@@ -103,6 +120,10 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     signature = inspect.signature(method)
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
+
+    # Preserve the original method docstring for tooling and auto-generated metadata.
+    wrapper.__doc__ = inspect.getdoc(method)
+
     return wrapper
 
 
@@ -130,7 +151,12 @@ def register_all_api_methods() -> None:
                 logger.debug("Tool already registered: %s", name)
                 continue
             wrapper = _make_tool_wrapper(method)
-            mcp.tool(name=name)(wrapper)
+            doc_meta = _extract_tool_doc_metadata(method)
+            tool_decorator = mcp.tool(
+                name=name,
+                description=doc_meta.description,
+            )
+            tool_decorator(wrapper)
             logger.debug("Registered tool: %s", name)
 
 

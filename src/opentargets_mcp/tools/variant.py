@@ -11,7 +11,34 @@ class VariantApi:
     """
 
     async def get_variant_info(self, client: OpenTargetsClient, variant_id: str) -> Dict[str, Any]:
-        """Get detailed information about a specific variant by its ID."""
+        """Retrieve core metadata and functional annotations for a variant.
+
+        **When to use**
+        - Confirm position, alleles, rsIDs, and HGVS nomenclature for a variant
+        - Inspect consequences, transcript impacts, and variant effect scores
+        - Provide foundational information before exploring evidence or associations
+
+        **When not to use**
+        - Searching for variant IDs from traits/diseases (use study or evidence tools)
+        - Listing studies containing the variant (use `get_variant_credible_sets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `variant_id` (`str`): Identifier such as `"7_140453136_A_T"`.
+
+        **Returns**
+        - `Dict[str, Any]`: `{"variant": {"id": str, "variantDescription": str, "chromosome": str, "position": int, "rsIds": [...], "transcriptConsequences": [...], ...}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate via the client.
+
+        **Example**
+        ```python
+        variant_api = VariantApi()
+        variant = await variant_api.get_variant_info(client, "7_140453136_A_T")
+        print(variant["variant"]["rsIds"])
+        ```
+        """
         graphql_query = """
         query VariantInfo($variantId: String!) {
             variant(variantId: $variantId) {
@@ -73,14 +100,44 @@ class VariantApi:
         return await client._query(graphql_query, {"variantId": variant_id})
 
     async def get_variant_credible_sets(
-        self, 
-        client: OpenTargetsClient, 
-        variant_id: str, 
+        self,
+        client: OpenTargetsClient,
+        variant_id: str,
         study_types: Optional[List[str]] = None,
-        page_index: int = 0, 
+        page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
-        """Get credible sets associated with a variant."""
+        """List credible sets that include a specific variant.
+
+        **When to use**
+        - Identify which fine-mapping studies implicate the variant
+        - Filter credible sets by study types (e.g., GWAS, molecular traits)
+        - Provide pagination for user exploration of multiple loci
+
+        **When not to use**
+        - Fetching study metadata (use study tools)
+        - Retrieving variant pharmacogenomics or evidence (use respective tools)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `variant_id` (`str`): Variant identifier.
+        - `study_types` (`Optional[List[str]]`): List of `StudyTypeEnum` values to filter by.
+        - `page_index` (`int`): Zero-based page number (default 0).
+        - `page_size` (`int`): Number of rows per page (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"variant": {"id": str, "credibleSets": {"count": int, "rows": [{"studyLocusId": str, "studyId": str, "confidence": float, ...}, ...]}}}`.
+
+        **Errors**
+        - GraphQL/network exceptions bubble up.
+
+        **Example**
+        ```python
+        variant_api = VariantApi()
+        credible_sets = await variant_api.get_variant_credible_sets(client, "7_140453136_A_T")
+        print(credible_sets["variant"]["credibleSets"]["rows"][0]["studyId"])
+        ```
+        """
         graphql_query = """
         query VariantCredibleSets(
             $variantId: String!,
@@ -141,13 +198,42 @@ class VariantApi:
         return await client._query(graphql_query, variables)
 
     async def get_variant_pharmacogenomics(
-        self, 
-        client: OpenTargetsClient, 
-        variant_id: str, 
-        page_index: int = 0, 
+        self,
+        client: OpenTargetsClient,
+        variant_id: str,
+        page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
-        """Get pharmacogenomics data for a variant."""
+        """Retrieve pharmacogenomic annotations for a variant.
+
+        **When to use**
+        - Surface genotype–phenotype relationships relevant to drug response
+        - Provide evidence level and datasource for pharmacogenomic findings
+        - Explore associated targets and drugs for personalised medicine use cases
+
+        **When not to use**
+        - Listing fine-mapping evidence (use `get_variant_credible_sets`)
+        - Accessing generic evidence (use `get_variant_evidences`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `variant_id` (`str`): Variant identifier.
+        - `page_index` (`int`): Zero-based page (default 0).
+        - `page_size` (`int`): Number of pharmacogenomic rows (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"variant": {"id": str, "rsIds": [...], "pharmacogenomics": [{"variantId": str, "genotype": str, "phenotypeText": str, "pgxCategory": str, "evidenceLevel": str, "drugs": [...], ...}, ...]}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate.
+
+        **Example**
+        ```python
+        variant_api = VariantApi()
+        pgx = await variant_api.get_variant_pharmacogenomics(client, "7_140453136_A_T")
+        print(pgx["variant"]["pharmacogenomics"][0]["phenotypeText"])
+        ```
+        """
         graphql_query = """
         query VariantPharmacogenomics($variantId: String!, $pageIndex: Int!, $pageSize: Int!) {
             variant(variantId: $variantId) {
@@ -204,7 +290,36 @@ class VariantApi:
         size: int = 10,
         cursor: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Get evidence associated with a variant."""
+        """Retrieve evidence strings linking a variant to targets or diseases.
+
+        **When to use**
+        - Audit supporting evidence for variant-level associations
+        - Filter by datasource (e.g., `["gene_burden", "ot_differential_expression"]`)
+        - Page through evidence rows using the cursor interface
+
+        **When not to use**
+        - Focusing on pharmacogenomics or study credible sets (use other variant APIs)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `variant_id` (`str`): Variant identifier.
+        - `datasource_ids` (`Optional[List[str]]`): Limit evidence to specific datasources.
+        - `size` (`int`): Number of evidence rows per page (default 10).
+        - `cursor` (`Optional[str]`): Pagination cursor from a previous request.
+
+        **Returns**
+        - `Dict[str, Any]`: `{"variant": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "target": {...}, "disease": {...}, ...}], ...}}}`.
+
+        **Errors**
+        - GraphQL/network exceptions bubble up through the client.
+
+        **Example**
+        ```python
+        variant_api = VariantApi()
+        evidences = await variant_api.get_variant_evidences(client, "7_140453136_A_T", size=5)
+        print(evidences["variant"]["evidences"]["rows"][0]["datasourceId"])
+        ```
+        """
         graphql_query = """
         query VariantEvidences(
             $variantId: String!,
@@ -264,4 +379,3 @@ class VariantApi:
         }
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
-

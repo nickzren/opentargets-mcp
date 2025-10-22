@@ -75,9 +75,38 @@ class SearchApi:
         page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
-        """
-        Searches for entities and intelligently resolves synonyms or misspellings
-        to the best canonical entity.
+        """Search Open Targets entities and resolve synonyms to canonical IDs.
+
+        **When to use**
+        - Start any workflow that begins with a free-text gene, disease, or compound query
+        - Convert common synonyms (for example, `\"ERBB1\"`) into platform identifiers (`\"ENSG...\"`)
+        - Retrieve paginated ranked hits with confidence scores for UI display
+
+        **When not to use**
+        - You already know the exact entity identifier (call the domain tool directly)
+        - You need autocomplete suggestions while the user types (use `search_suggestions`)
+        - You want aggregated facet counts only (use `search_facets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): Configured GraphQL client.
+        - `query_string` (`str`): Free-text term such as `"BRAF"` or `"melanoma"`.
+        - `entity_names` (`Optional[List[str]]`): Restrict the search to `["target"]`, `["disease"]`, `["drug"]`, or any combination; defaults to all.
+        - `page_index` (`int`): Zero-based page to return; use for pagination in large result sets.
+        - `page_size` (`int`): Number of hits per page (1–20 recommended; hard limit 100).
+
+        **Returns**
+        - `Dict[str, Any]`: Response structured as `{"search": {"total": int, "hits": [{"id": str, "entity": str, "name": str, "score": float, "object": {...}}, ...]}}`.
+
+        **Errors**
+        - Bubbles up GraphQL or network exceptions from `OpenTargetsClient`.
+
+        **Example**
+        ```python
+        search_api = SearchApi()
+        result = await search_api.search_entities(client, "BRAF", entity_names=["target"])
+        top_hit = result["search"]["hits"][0]
+        print(top_hit["id"], top_hit["object"]["approvedSymbol"])
+        ```
         """
         direct_search_task = asyncio.create_task(
             self._search_direct(client, query_string, entity_names, page_index, page_size)
@@ -107,8 +136,36 @@ class SearchApi:
         entity_names: Optional[List[str]] = None,
         max_suggestions: int = 10
     ) -> Dict[str, Any]:
-        """
-        Get autocomplete suggestions for a partial query.
+        """Return autocomplete suggestions for partially typed queries.
+
+        **When to use**
+        - Offer live search hints in conversational or UI agents
+        - Pre-validate user input before issuing a full search
+        - Guide users toward canonical spellings while they type
+
+        **When not to use**
+        - Fuzzy searching across the full corpus (use `search_entities`)
+        - Operating in environments without the optional `thefuzz` dependency
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client used to fetch candidate hits.
+        - `query_prefix` (`str`): Partial term with at least three characters.
+        - `entity_names` (`Optional[List[str]]`): Limit suggestions to specific entity types; defaults to all.
+        - `max_suggestions` (`int`): Maximum number of entries to return (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: Either `{"suggestions": [{"label": str, "score": int, "id": str, "entity": str}, ...]}` or an error dictionary when fuzzy matching is unavailable.
+
+        **Errors**
+        - Returns `{"error": "...requires thefuzz..."}` if the optional dependency is missing.
+        - Propagates client/network exceptions triggered during the candidate search.
+
+        **Example**
+        ```python
+        search_api = SearchApi()
+        suggestions = await search_api.search_suggestions(client, "mel", entity_names=["disease"])
+        print([item["label"] for item in suggestions["suggestions"]])
+        ```
         """
         if not self.fuzzy_process:
             return {"error": "'thefuzz' library is required for suggestions."}
@@ -162,8 +219,35 @@ class SearchApi:
         threshold: Optional[float] = 0.5,
         size: int = 10
     ) -> Dict[str, Any]:
-        """
-        Get targets similar to a given target Ensembl ID based on shared associations.
+        """Identify targets with similar association profiles to the seed target.
+
+        **When to use**
+        - Expand a target list by finding genes with overlapping disease or evidence profiles
+        - Prioritise follow-up genes in pathway or clustering analyses
+        - Provide recommendations when a user is exploring alternatives to a known target
+
+        **When not to use**
+        - Looking for disease-associated targets directly (use `get_target_associated_diseases`)
+        - Comparing expression or biology features (use the respective target biology tools)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `entity_id` (`str`): Ensembl gene identifier (`"ENSG..."`) for the reference target.
+        - `threshold` (`Optional[float]`): Minimum similarity score (0–1) to include; defaults to `0.5`.
+        - `size` (`int`): Maximum number of similar targets to return (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: GraphQL payload `{"target": {"id": str, "approvedSymbol": str, "similarEntities": [{"score": float, "object": {...}}]}}`.
+
+        **Errors**
+        - Raises GraphQL/network exceptions from `OpenTargetsClient` if the query fails.
+
+        **Example**
+        ```python
+        search_api = SearchApi()
+        similar = await search_api.get_similar_targets(client, "ENSG00000157764", threshold=0.6)
+        print([hit["object"]["approvedSymbol"] for hit in similar["target"]["similarEntities"]])
+        ```
         """
         graphql_query_target = """
         query SimilarTargets($entityId: String!, $threshold: Float, $size: Int!) {
@@ -191,7 +275,38 @@ class SearchApi:
         page_index: int = 0,
         page_size: int = 20
     ) -> Dict[str, Any]:
-        """Get search facets for filtering, optionally based on a query string."""
+        """Return facet counts to help filter search results.
+
+        **When to use**
+        - Build dynamic filters (by datasource, entity type, etc.) before issuing detailed queries
+        - Provide an overview of the distribution of results for a given search term
+        - Support UI components that need to know which categories have content
+
+        **When not to use**
+        - Fetching individual search hits (use `search_entities`)
+        - Needing aggregation beyond the built-in facet categories
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `query_string` (`Optional[str]`): Free-text term; defaults to `"*"` (all records) when omitted.
+        - `category_id` (`Optional[str]`): Restrict facets to a particular category (for example `"datasource"`).
+        - `entity_names` (`Optional[List[str]]`): Limit the facet calculation to specific entity types.
+        - `page_index` (`int`): Zero-based index for paging facet hits.
+        - `page_size` (`int`): Number of facet hits to return (default 20; capped by API).
+
+        **Returns**
+        - `Dict[str, Any]`: Response `{"facets": {"total": int, "categories": [{"name": str, "total": int}, ...], "hits": [...]}}`.
+
+        **Errors**
+        - GraphQL or network failures propagate from the client.
+
+        **Example**
+        ```python
+        search_api = SearchApi()
+        facets = await search_api.search_facets(client, query_string="BRAF")
+        print(facets["facets"]["categories"])
+        ```
+        """
         if not query_string:
             query_string = "*"
 
