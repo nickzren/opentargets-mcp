@@ -182,8 +182,9 @@ The ReAct Agent provides an interactive terminal interface for exploring Open Ta
 ![Open Targets React Agent Demo](docs/screenshots/react-agent-demo.png)
 
 ```bash
-# Create .env file with your OpenAI API key
-echo "OPENAI_API_KEY=your_key_here" > .env
+# Copy the example .env file and add your OpenAI API key
+cp .env.example .env
+# Then edit .env and set your OPENAI_API_KEY
 
 # Run agent
 uv run python examples/react_agent.py

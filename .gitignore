@@ -53,3 +53,6 @@ Thumbs.db
 uv.lock
 .mcpregistry_registry_token
 .mcpregistry_github_token
+
+# Environment variables
+.env

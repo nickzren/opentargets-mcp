@@ -150,8 +150,16 @@ async def main():
 
     api_client = OpenTargetsClient()
     await api_client._ensure_session()
-    
-    tools = [tool.model_dump() for tool in mcp._tool_manager.list_tools()]
+
+    # Get tools and prepare for JSON serialization
+    tools = []
+    for tool in await mcp._tool_manager.list_tools():
+        tool_dict = tool.model_dump(exclude={'fn', 'serializer'})
+        # Convert sets to lists for JSON serialization
+        if 'tags' in tool_dict and isinstance(tool_dict['tags'], set):
+            tool_dict['tags'] = list(tool_dict['tags'])
+        tools.append(tool_dict)
+
     tools_json_str = json.dumps(tools, indent=2)
 
     system_prompt = f"""
