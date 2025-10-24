@@ -5,8 +5,12 @@ across multiple entity types in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 import asyncio
+import logging
 from ..queries import OpenTargetsClient
+from ..utils import filter_none_values
 from .meta import MetaApi
+
+logger = logging.getLogger(__name__)
 
 try:
     from thefuzz import process as fuzzy_process
@@ -23,7 +27,7 @@ class SearchApi:
         self.meta_api = MetaApi()
         self.fuzzy_process = fuzzy_process
         if not self.fuzzy_process:
-            print("Warning: 'thefuzz' library not found. Suggestions will not work. Please install it with 'pip install thefuzz python-Levenshtein'.")
+            logger.warning("'thefuzz' library not found. Suggestions will not work. Please install it with 'pip install thefuzz python-Levenshtein'.")
 
     async def _search_direct(
         self,
@@ -105,7 +109,7 @@ class SearchApi:
         search_api = SearchApi()
         result = await search_api.search_entities(client, "BRAF", entity_names=["target"])
         top_hit = result["search"]["hits"][0]
-        print(top_hit["id"], top_hit["object"]["approvedSymbol"])
+        logger.info("%s %s", top_hit["id"], top_hit["object"]["approvedSymbol"])
         ```
         """
         direct_search_task = asyncio.create_task(
@@ -124,7 +128,8 @@ class SearchApi:
 
         direct_top_hit_id = direct_results.get("search", {}).get("hits", [{}])[0].get("id")
         if best_mapped_hit and best_mapped_hit.get("id") != direct_top_hit_id:
-            print(f"Resolving '{query_string}' to best match: '{best_mapped_hit.get('name')}' ({best_mapped_hit.get('id')}). Fetching canonical results.")
+            logger.info("Resolving '%s' to best match: '%s' (%s). Fetching canonical results.",
+                       query_string, best_mapped_hit.get('name'), best_mapped_hit.get('id'))
             return await self._search_direct(client, best_mapped_hit["id"], entity_names, page_index, page_size)
 
         return direct_results
@@ -164,7 +169,7 @@ class SearchApi:
         ```python
         search_api = SearchApi()
         suggestions = await search_api.search_suggestions(client, "mel", entity_names=["disease"])
-        print([item["label"] for item in suggestions["suggestions"]])
+        logger.info([item["label"] for item in suggestions["suggestions"]])
         ```
         """
         if not self.fuzzy_process:
@@ -246,7 +251,7 @@ class SearchApi:
         ```python
         search_api = SearchApi()
         similar = await search_api.get_similar_targets(client, "ENSG00000157764", threshold=0.6)
-        print([hit["object"]["approvedSymbol"] for hit in similar["target"]["similarEntities"]])
+        logger.info([hit["object"]["approvedSymbol"] for hit in similar["target"]["similarEntities"]])
         ```
         """
         graphql_query_target = """
@@ -304,7 +309,7 @@ class SearchApi:
         ```python
         search_api = SearchApi()
         facets = await search_api.search_facets(client, query_string="BRAF")
-        print(facets["facets"]["categories"])
+        logger.info(facets["facets"]["categories"])
         ```
         """
         if not query_string:
@@ -323,12 +328,11 @@ class SearchApi:
             }
         }
         """
-        variables = {
+        variables = filter_none_values({
             "queryString": query_string,
             "categoryId": category_id,
             "entityNames": entity_names if entity_names else ["target", "disease", "drug"],
             "pageIndex": page_index,
             "pageSize": page_size
-        }
-        variables = {k: v for k, v in variables.items() if v is not None}
+        })
         return await client._query(graphql_query, variables)
