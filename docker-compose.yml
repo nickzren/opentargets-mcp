@@ -1,0 +1,12 @@
+services:
+  ot-mcp-server:
+    container_name: ot-mcp-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "opentargets_mcp.server"]
