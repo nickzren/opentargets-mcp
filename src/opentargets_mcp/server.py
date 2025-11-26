@@ -61,7 +61,13 @@ async def lifespan(server: FastMCP):
     global _client
 
     logger.info("Starting Open Targets MCP server")
-    _client = OpenTargetsClient()
+    api_url = os.getenv("OPEN_TARGETS_API_URL")
+    if api_url is not None:
+        logger.info("Using custom Open Targets API URL: %s", api_url)
+        _client = OpenTargetsClient(base_url=api_url)
+    else:
+        logger.info("Using default Open Targets API URL")
+        _client = OpenTargetsClient()
     await _client._ensure_session()
 
     try:
@@ -80,6 +86,7 @@ mcp = FastMCP(
     name="opentargets",
     version="0.2.0",
     lifespan=lifespan,
+    stateless_http=True,
 )
 
 _target_api = TargetApi()
