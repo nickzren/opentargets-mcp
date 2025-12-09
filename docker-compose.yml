@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      - .env
     ports:
       - "${FASTMCP_SERVER_PORT:-8000}:${FASTMCP_SERVER_PORT:-8000}"
     volumes:
