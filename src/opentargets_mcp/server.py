@@ -86,7 +86,6 @@ mcp = FastMCP(
     name="opentargets",
     version="0.2.0",
     lifespan=lifespan,
-    stateless_http=True,
 )
 
 _target_api = TargetApi()
