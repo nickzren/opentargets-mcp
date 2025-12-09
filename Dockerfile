@@ -5,7 +5,6 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Copy requirements / project
-COPY pyproject.toml .
 COPY . .
 
 # Install dependencies
