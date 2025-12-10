@@ -1,6 +1,6 @@
 [project]
 name = "opentargets-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP server for Open Targets Platform biomedical data access"
 authors = [{name = "Nick Ren"}]
 license = {text = "MIT"}
