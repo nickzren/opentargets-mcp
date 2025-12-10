@@ -6,8 +6,7 @@ COPY . .
 
 # Install dependencies
 RUN pip install --no-cache-dir uv --upgrade \
-    && uv sync \
-    && pip install --no-cache-dir .
+    && uv sync
 
 # Default command
 CMD ["uv","run","python","-m","opentargets_mcp.server"]
