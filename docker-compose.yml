@@ -5,7 +5,10 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      - .env
+      - FASTMCP_SERVER_HOST=${FASTMCP_SERVER_HOST:-0.0.0.0}
+      - FASTMCP_SERVER_PORT=${FASTMCP_SERVER_PORT:-8000}
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-http}
+      - OPEN_TARGETS_API_URL=${OPEN_TARGETS_API_URL:-https://api.platform.opentargets.org/api/v4/graphql}
     ports:
       - "${FASTMCP_SERVER_PORT:-8000}:${FASTMCP_SERVER_PORT:-8000}"
     restart: unless-stopped
