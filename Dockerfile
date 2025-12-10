@@ -1,9 +1,6 @@
 # Use a suitable Python base image
 FROM python:3.12-slim
 
-# Set workdir
-WORKDIR /app
-
 # Copy requirements / project
 COPY . .
 

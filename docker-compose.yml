@@ -8,7 +8,5 @@ services:
       - .env
     ports:
       - "${FASTMCP_SERVER_PORT:-8000}:${FASTMCP_SERVER_PORT:-8000}"
-    volumes:
-      - .:/app
     restart: unless-stopped
     command: ["uv", "run", "python", "-m", "opentargets_mcp.server"]
