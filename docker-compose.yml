@@ -1,0 +1,15 @@
+services:
+  ot-mcp-server:
+    container_name: ot-mcp-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - FASTMCP_SERVER_HOST=${FASTMCP_SERVER_HOST:-0.0.0.0}
+      - FASTMCP_SERVER_PORT=${FASTMCP_SERVER_PORT:-8000}
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-http}
+      - OPEN_TARGETS_API_URL=${OPEN_TARGETS_API_URL:-https://api.platform.opentargets.org/api/v4/graphql}
+    ports:
+      - "${FASTMCP_SERVER_PORT:-8000}:${FASTMCP_SERVER_PORT:-8000}"
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "opentargets_mcp.server"]
