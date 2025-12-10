@@ -67,6 +67,9 @@ cd opentargets-mcp
 # Build and run with Docker Compose
 docker-compose up -d --build
 ```
+Note: the default transport is `http` for docker deployments.
+
+See the configuration section below for details and how to set ports and other environment variables.
 
 ## Features
 
@@ -147,7 +150,7 @@ uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 
 ### Configuration
 
-- **Environment variables**: `MCP_TRANSPORT` (`stdio`, `sse`, or `http`), `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` control the transport and bind address. Defaults are `stdio`, `0.0.0.0`, and `8000`. `OPEN_TARGETS_API_URL` can be set to use a custom Open Targets API endpoint.
+- **Environment variables**: `MCP_TRANSPORT` (`stdio`, `sse`, or `http`), `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` control the transport and bind address. Defaults are `stdio`, `0.0.0.0`, and `8000`. `OPEN_TARGETS_API_URL` can be set to use a custom Open Targets API endpoint. Default is set to the public API: `https://api.platform.opentargets.org/api/v4/graphql`.
 - **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000` provides flexible transport selection.
 - **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
 
