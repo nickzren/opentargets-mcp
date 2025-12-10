@@ -83,17 +83,6 @@ class VariantApi:
                         label
                     }
                 }
-                variantEffect {
-                    score
-                    normalisedScore
-                    method
-                    assessment
-                    assessmentFlag
-                    target {
-                        id
-                        approvedSymbol
-                    }
-                }
             }
         }
         """
@@ -342,9 +331,7 @@ class VariantApi:
                         score
                         datasourceId
                         datatypeId
-                        # variantId  <- THIS LINE WAS REMOVED
                         variantRsId
-                        variantEffect
                         confidence
                         literature
                         studyId
