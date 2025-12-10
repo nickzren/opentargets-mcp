@@ -84,3 +84,21 @@ class TestSearchTools:
         if result.get("facets"):
             assert "categories" in result["facets"]
             assert "hits" in result["facets"]
+
+    async def test_search_entities_variant(self, client: OpenTargetsClient):
+        result = await self.search_api.search_entities(client, "rs699", entity_names=["variant"], page_size=1)
+        assert result is not None
+        assert "search" in result
+        if result.get("search") and result["search"].get("hits"):
+            assert result["search"]["hits"][0]["entity"] == "variant"
+            obj = result["search"]["hits"][0].get("object", {})
+            assert "chromosome" in obj or "position" in obj
+
+    async def test_search_entities_study(self, client: OpenTargetsClient):
+        result = await self.search_api.search_entities(client, "asthma", entity_names=["study"], page_size=1)
+        assert result is not None
+        assert "search" in result
+        if result.get("search") and result["search"].get("hits"):
+            assert result["search"]["hits"][0]["entity"] == "study"
+            obj = result["search"]["hits"][0].get("object", {})
+            assert "studyType" in obj or "traitFromSource" in obj

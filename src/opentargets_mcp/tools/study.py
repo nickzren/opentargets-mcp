@@ -379,3 +379,228 @@ class StudyApi:
         }
         """
         return await client._query(graphql_query, {"studyLocusId": study_locus_id})
+
+    async def get_credible_set_colocalisation(
+        self,
+        client: OpenTargetsClient,
+        study_locus_id: str,
+        page_index: int = 0,
+        page_size: int = 10
+    ) -> Dict[str, Any]:
+        """Retrieve colocalisation results for a credible set.
+
+        **When to use**
+        - Identify GWAS-GWAS or GWAS-molQTL overlapping credible sets
+        - Find shared causal variants between traits using COLOC or eCAVIAR methods
+        - Prioritise causal genes by linking GWAS signals to eQTL/pQTL evidence
+
+        **When not to use**
+        - Fetching credible set metadata without colocalisation (use `get_credible_set_by_id`)
+        - Listing all credible sets for a study (use `get_study_credible_sets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `study_locus_id` (`str`): Credible set identifier.
+        - `page_index` (`int`): Zero-based page (default 0).
+        - `page_size` (`int`): Number of colocalisation rows per page (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"credibleSet": {"studyLocusId": str, "colocalisation": {"count": int, "rows": [{"colocalisationMethod": str, "h4": float, "otherStudyLocus": {...}}, ...]}}}`.
+
+        **Errors**
+        - GraphQL/network exceptions bubble up.
+
+        **Example**
+        ```python
+        study_api = StudyApi()
+        coloc = await study_api.get_credible_set_colocalisation(client, "GCST90002357_1_154453788_C_T")
+        for row in coloc["credibleSet"]["colocalisation"]["rows"]:
+            print(row["colocalisationMethod"], row["h4"])
+        ```
+        """
+        graphql_query = """
+        query CredibleSetColocalisation($studyLocusId: String!, $pageIndex: Int!, $pageSize: Int!) {
+            credibleSet(studyLocusId: $studyLocusId) {
+                studyLocusId
+                studyId
+                studyType
+                chromosome
+                position
+                variant {
+                    id
+                    rsIds
+                }
+                study {
+                    id
+                    traitFromSource
+                }
+                colocalisation(page: {index: $pageIndex, size: $pageSize}) {
+                    count
+                    rows {
+                        leftStudyLocusId
+                        rightStudyLocusId
+                        rightStudyType
+                        chromosome
+                        colocalisationMethod
+                        numberColocalisingVariants
+                        h3
+                        h4
+                        clpp
+                        betaRatioSignAverage
+                        otherStudyLocus {
+                            studyLocusId
+                            studyId
+                            studyType
+                            variant {
+                                id
+                                rsIds
+                            }
+                            study {
+                                id
+                                traitFromSource
+                                target {
+                                    id
+                                    approvedSymbol
+                                }
+                                biosample {
+                                    biosampleId
+                                    biosampleName
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {
+            "studyLocusId": study_locus_id,
+            "pageIndex": page_index,
+            "pageSize": page_size
+        })
+
+    async def get_credible_sets(
+        self,
+        client: OpenTargetsClient,
+        study_locus_ids: Optional[List[str]] = None,
+        study_ids: Optional[List[str]] = None,
+        variant_ids: Optional[List[str]] = None,
+        study_types: Optional[List[str]] = None,
+        regions: Optional[List[str]] = None,
+        page_index: int = 0,
+        page_size: int = 10
+    ) -> Dict[str, Any]:
+        """Query credible sets with flexible filtering options.
+
+        **When to use**
+        - Search credible sets by multiple criteria (study IDs, variant IDs, regions)
+        - Filter by study type (gwas, eqtl, pqtl, sqtl, tuqtl, sceqtl)
+        - Query by genomic region for positional analyses
+
+        **When not to use**
+        - Fetching a single credible set by ID (use `get_credible_set_by_id`)
+        - Listing credible sets for a specific study (use `get_study_credible_sets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `study_locus_ids` (`Optional[List[str]]`): Filter by specific credible set IDs.
+        - `study_ids` (`Optional[List[str]]`): Filter by study identifiers.
+        - `variant_ids` (`Optional[List[str]]`): Filter by variant identifiers.
+        - `study_types` (`Optional[List[str]]`): Filter by study type (e.g., `["gwas", "eqtl"]`).
+        - `regions` (`Optional[List[str]]`): Filter by genomic regions (e.g., `["1:154000000-155000000"]`).
+        - `page_index` (`int`): Zero-based page (default 0).
+        - `page_size` (`int`): Number of rows per page (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"credibleSets": {"count": int, "rows": [{"studyLocusId": str, "studyId": str, "variant": {...}, ...}]}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate.
+
+        **Example**
+        ```python
+        study_api = StudyApi()
+        # Find all eQTL credible sets for a variant
+        results = await study_api.get_credible_sets(
+            client,
+            variant_ids=["1_154453788_C_T"],
+            study_types=["eqtl"]
+        )
+        print(results["credibleSets"]["count"])
+        ```
+        """
+        graphql_query = """
+        query CredibleSets(
+            $studyLocusIds: [String!],
+            $studyIds: [String!],
+            $variantIds: [String!],
+            $studyTypes: [StudyTypeEnum!],
+            $regions: [String!],
+            $pageIndex: Int!,
+            $pageSize: Int!
+        ) {
+            credibleSets(
+                studyLocusIds: $studyLocusIds,
+                studyIds: $studyIds,
+                variantIds: $variantIds,
+                studyTypes: $studyTypes,
+                regions: $regions,
+                page: {index: $pageIndex, size: $pageSize}
+            ) {
+                count
+                rows {
+                    studyLocusId
+                    studyId
+                    studyType
+                    chromosome
+                    position
+                    region
+                    locusStart
+                    locusEnd
+                    beta
+                    zScore
+                    pValueMantissa
+                    pValueExponent
+                    standardError
+                    credibleSetIndex
+                    credibleSetlog10BF
+                    finemappingMethod
+                    confidence
+                    purityMeanR2
+                    purityMinR2
+                    effectAlleleFrequencyFromSource
+                    sampleSize
+                    qualityControls
+                    variant {
+                        id
+                        rsIds
+                        chromosome
+                        position
+                    }
+                    study {
+                        id
+                        traitFromSource
+                        studyType
+                        pubmedId
+                        publicationFirstAuthor
+                        target {
+                            id
+                            approvedSymbol
+                        }
+                    }
+                }
+            }
+        }
+        """
+        variables = {
+            "studyLocusIds": study_locus_ids,
+            "studyIds": study_ids,
+            "variantIds": variant_ids,
+            "studyTypes": study_types,
+            "regions": regions,
+            "pageIndex": page_index,
+            "pageSize": page_size
+        }
+        # Remove None values
+        variables = {k: v for k, v in variables.items() if v is not None}
+        return await client._query(graphql_query, variables)

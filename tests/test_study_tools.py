@@ -43,3 +43,25 @@ class TestStudyTools:
         except Exception as e:
             # It's okay if this specific ID doesn't exist
             print(f"Credible set test skipped: {e}")
+
+    async def test_get_credible_set_colocalisation(self, client: OpenTargetsClient):
+        # First get a valid credible set ID
+        result = await self.study_api.get_credible_sets(client, study_types=["gwas"], page_size=1)
+        assert result is not None
+        assert "credibleSets" in result
+        if result.get("credibleSets", {}).get("rows"):
+            cs_id = result["credibleSets"]["rows"][0]["studyLocusId"]
+            coloc_result = await self.study_api.get_credible_set_colocalisation(client, cs_id, page_size=5)
+            assert coloc_result is not None
+            assert "credibleSet" in coloc_result
+            if coloc_result.get("credibleSet"):
+                assert "colocalisation" in coloc_result["credibleSet"]
+
+    async def test_get_credible_sets(self, client: OpenTargetsClient):
+        result = await self.study_api.get_credible_sets(client, study_types=["gwas"], page_size=2)
+        assert result is not None
+        assert "credibleSets" in result
+        if result.get("credibleSets"):
+            assert "count" in result["credibleSets"]
+            assert "rows" in result["credibleSets"]
+            assert result["credibleSets"]["count"] > 0

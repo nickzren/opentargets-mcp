@@ -44,3 +44,24 @@ class TestVariantTools:
             assert "evidences" in result["variant"]
             if result["variant"]["evidences"]:
                 assert "rows" in result["variant"]["evidences"]
+
+    async def test_get_variant_intervals(self, client: OpenTargetsClient):
+        result = await self.variant_api.get_variant_intervals(client, TEST_VARIANT_ID_1, page_size=5)
+        assert result is not None
+        assert "variant" in result
+        if result.get("variant"):
+            assert "intervals" in result["variant"]
+            if result["variant"]["intervals"]:
+                assert "count" in result["variant"]["intervals"]
+                assert "rows" in result["variant"]["intervals"]
+
+    async def test_get_variant_protein_coordinates(self, client: OpenTargetsClient):
+        # Use BRAF V600E variant which has protein coding consequences
+        result = await self.variant_api.get_variant_protein_coordinates(client, "7_140753336_A_T", page_size=5)
+        assert result is not None
+        assert "variant" in result
+        if result.get("variant"):
+            assert "proteinCodingCoordinates" in result["variant"]
+            if result["variant"]["proteinCodingCoordinates"]:
+                assert "count" in result["variant"]["proteinCodingCoordinates"]
+                assert "rows" in result["variant"]["proteinCodingCoordinates"]

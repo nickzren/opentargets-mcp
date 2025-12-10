@@ -58,6 +58,8 @@ class SearchApi:
                         ... on Target { id, approvedSymbol, approvedName, biotype }
                         ... on Disease { id, name, description, therapeuticAreas { id, name } }
                         ... on Drug { id, name, drugType, maximumClinicalTrialPhase, isApproved }
+                        ... on Variant { id, chromosome, position, rsIds }
+                        ... on Study { id, studyType, traitFromSource }
                     }
                 }
             }
@@ -65,7 +67,7 @@ class SearchApi:
         """
         variables = {
             "queryString": query_string,
-            "entityNames": entity_names if entity_names else ["target", "disease", "drug"],
+            "entityNames": entity_names if entity_names else ["target", "disease", "drug", "variant", "study"],
             "pageIndex": page_index,
             "pageSize": page_size
         }
@@ -331,7 +333,7 @@ class SearchApi:
         variables = filter_none_values({
             "queryString": query_string,
             "categoryId": category_id,
-            "entityNames": entity_names if entity_names else ["target", "disease", "drug"],
+            "entityNames": entity_names if entity_names else ["target", "disease", "drug", "variant", "study"],
             "pageIndex": page_index,
             "pageSize": page_size
         })

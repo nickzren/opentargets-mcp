@@ -194,8 +194,8 @@ class MetaApi:
 
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
-        - `query_terms` (`List[str]`): One or more free-text values such as `["BRAF", "melanoma"]`.
-        - `entity_names` (`Optional[List[str]]`): Optional subset of entity types (`"target"`, `"disease"`, `"drug"`) to consider; defaults to all three.
+        - `query_terms` (`List[str]`): One or more free-text values such as `["BRAF", "melanoma", "rs12345"]`.
+        - `entity_names` (`Optional[List[str]]`): Optional subset of entity types (`"target"`, `"disease"`, `"drug"`, `"variant"`, `"study"`) to consider; defaults to target, disease, and drug.
 
         **Returns**
         - `Dict[str, Any]`: GraphQL response `{"mapIds": {"total": int, "mappings": [...], "aggregations": {...}}}` where each mapping includes candidate hits with scores and entity metadata.
@@ -242,6 +242,17 @@ class MetaApi:
                                 name
                                 drugType
                             }
+                            ... on Variant {
+                                id
+                                chromosome
+                                position
+                                rsIds
+                            }
+                            ... on Study {
+                                id
+                                studyType
+                                traitFromSource
+                            }
                         }
                     }
                 }
@@ -261,6 +272,6 @@ class MetaApi:
         """
         variables = {
             "queryTerms": query_terms,
-            "entityNames": entity_names if entity_names else ["target", "disease", "drug"]
+            "entityNames": entity_names if entity_names else ["target", "disease", "drug", "variant", "study"]
         }
         return await client._query(graphql_query, variables)

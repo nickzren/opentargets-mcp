@@ -209,7 +209,7 @@ The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biom
 
 ## Available Tools
 
-The server wraps **45** GraphQL operations from the [Open Targets Platform](https://platform-docs.opentargets.org/). Every tool returns structured JSON that mirrors the official schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
+The server wraps **49** GraphQL operations from the [Open Targets Platform](https://platform-docs.opentargets.org/). Every tool returns structured JSON that mirrors the official schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
 
 ### Quick-start shortcuts
 - `get_target_info` – Core target identity record (Ensembl IDs, synonyms, genomic coordinates)
@@ -227,8 +227,8 @@ The server wraps **45** GraphQL operations from the [Open Targets Platform](http
 - **Drug profiling (7 tools)** — `get_drug_info`, `get_drug_cross_references`, `get_drug_linked_diseases`, `get_drug_linked_targets`, `get_drug_adverse_events`, `get_drug_pharmacovigilance`, `get_drug_warnings`.
 - **Evidence synthesis (2 tools)** — `get_target_disease_evidence`, `get_target_disease_biomarkers`.
 - **Search & discovery (4 tools)** — `search_entities`, `search_suggestions`, `get_similar_targets`, `search_facets`.
-- **Variant interpretation (4 tools)** — `get_variant_info`, `get_variant_credible_sets`, `get_variant_pharmacogenomics`, `get_variant_evidences`.
-- **Study exploration (4 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`.
+- **Variant interpretation (6 tools)** — `get_variant_info`, `get_variant_credible_sets`, `get_variant_pharmacogenomics`, `get_variant_evidences`, `get_variant_intervals`, `get_variant_protein_coordinates`.
+- **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
 
 Each grouping matches the data domains described in the Open Targets docs (targets, diseases, drugs, evidence, variants, and studies). For high-volume workloads, respect the platform's throttling guidance from the official API FAQ and cache downstream where possible.
 

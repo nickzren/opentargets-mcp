@@ -366,3 +366,173 @@ class VariantApi:
         }
         variables = {k: v for k, v in variables.items() if v is not None}
         return await client._query(graphql_query, variables)
+
+    async def get_variant_intervals(
+        self,
+        client: OpenTargetsClient,
+        variant_id: str,
+        page_index: int = 0,
+        page_size: int = 10
+    ) -> Dict[str, Any]:
+        """Retrieve enhancer-to-gene (E2G) predictions overlapping a variant.
+
+        **When to use**
+        - Identify regulatory regions (enhancers/promoters) that overlap a variant location
+        - Link variants to predicted target genes via ENCODE-rE2G model
+        - Explore tissue/cell-type specific regulatory evidence for variant interpretation
+
+        **When not to use**
+        - Fetching variant functional consequences (use `get_variant_info`)
+        - Looking for GWAS/QTL associations (use `get_variant_credible_sets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `variant_id` (`str`): Variant identifier (e.g., `"1_154453788_C_T"`).
+        - `page_index` (`int`): Zero-based page (default 0).
+        - `page_size` (`int`): Number of interval rows per page (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"variant": {"id": str, "intervals": {"count": int, "rows": [{"intervalType": str, "score": float, "target": {...}, "biosampleName": str, ...}]}}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate.
+
+        **Example**
+        ```python
+        variant_api = VariantApi()
+        intervals = await variant_api.get_variant_intervals(client, "1_154453788_C_T")
+        for row in intervals["variant"]["intervals"]["rows"]:
+            print(row["target"]["approvedSymbol"], row["biosampleName"], row["score"])
+        ```
+        """
+        graphql_query = """
+        query VariantIntervals($variantId: String!, $pageIndex: Int!, $pageSize: Int!) {
+            variant(variantId: $variantId) {
+                id
+                rsIds
+                chromosome
+                position
+                intervals(page: {index: $pageIndex, size: $pageSize}) {
+                    count
+                    rows {
+                        chromosome
+                        start
+                        end
+                        intervalType
+                        score
+                        resourceScore {
+                            name
+                            value
+                        }
+                        datasourceId
+                        pmid
+                        studyId
+                        distanceToTss
+                        biosampleName
+                        biosample {
+                            biosampleId
+                            biosampleName
+                            description
+                        }
+                        target {
+                            id
+                            approvedSymbol
+                            approvedName
+                            biotype
+                        }
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {
+            "variantId": variant_id,
+            "pageIndex": page_index,
+            "pageSize": page_size
+        })
+
+    async def get_variant_protein_coordinates(
+        self,
+        client: OpenTargetsClient,
+        variant_id: str,
+        page_index: int = 0,
+        page_size: int = 10
+    ) -> Dict[str, Any]:
+        """Retrieve protein-level consequences for a variant.
+
+        **When to use**
+        - Map variants to amino acid changes in protein products
+        - Identify protein positions affected by coding variants
+        - Support structural biology analyses linking variants to protein function
+
+        **When not to use**
+        - Fetching transcript-level consequences (use `get_variant_info`)
+        - Looking for regulatory region overlaps (use `get_variant_intervals`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `variant_id` (`str`): Variant identifier (e.g., `"7_140753336_A_T"`).
+        - `page_index` (`int`): Zero-based page (default 0).
+        - `page_size` (`int`): Number of rows per page (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"variant": {"id": str, "proteinCodingCoordinates": {"count": int, "rows": [...]}}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate.
+
+        **Example**
+        ```python
+        variant_api = VariantApi()
+        coords = await variant_api.get_variant_protein_coordinates(client, "7_140753336_A_T")
+        print(coords["variant"]["proteinCodingCoordinates"]["count"])
+        ```
+        """
+        graphql_query = """
+        query VariantProteinCoordinates($variantId: String!, $pageIndex: Int!, $pageSize: Int!) {
+            variant(variantId: $variantId) {
+                id
+                rsIds
+                chromosome
+                position
+                proteinCodingCoordinates(page: {index: $pageIndex, size: $pageSize}) {
+                    count
+                    rows {
+                        aminoAcidPosition
+                        referenceAminoAcid
+                        alternateAminoAcid
+                        variantEffect
+                        uniprotAccessions
+                        therapeuticAreas
+                        datasources {
+                            datasourceId
+                            datasourceNiceName
+                            datasourceCount
+                        }
+                        variantConsequences {
+                            id
+                            label
+                        }
+                        diseases {
+                            id
+                            name
+                        }
+                        target {
+                            id
+                            approvedSymbol
+                            approvedName
+                        }
+                        variant {
+                            id
+                            rsIds
+                        }
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {
+            "variantId": variant_id,
+            "pageIndex": page_index,
+            "pageSize": page_size
+        })
