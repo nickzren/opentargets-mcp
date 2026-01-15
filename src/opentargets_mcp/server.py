@@ -24,6 +24,7 @@ from .tools.search import SearchApi
 from .tools.study import StudyApi
 from .tools.target import TargetApi
 from .tools.variant import VariantApi
+from .resolver import resolve_params
 from mcp.server.lowlevel.server import NotificationOptions
 
 __all__ = [
@@ -115,13 +116,16 @@ def _extract_tool_doc_metadata(method: Callable[..., Any]) -> _ToolDocMetadata:
 
 def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap an API coroutine so the shared client is injected automatically."""
+    signature = inspect.signature(method)
 
     @functools.wraps(method)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         client = get_client()
-        return await method(client, *args, **kwargs)
+        bound = signature.bind_partial(client, *args, **kwargs)
+        params = {name: value for name, value in bound.arguments.items() if name != "client"}
+        resolved = await resolve_params(client, params)
+        return await method(client, **resolved)
 
-    signature = inspect.signature(method)
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
 

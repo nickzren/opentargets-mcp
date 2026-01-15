@@ -151,6 +151,7 @@ uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 ### Configuration
 
 - **Environment variables**: `MCP_TRANSPORT` (`stdio`, `sse`, or `http`), `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` control the transport and bind address. Defaults are `stdio`, `0.0.0.0`, and `8000`. `OPEN_TARGETS_API_URL` can be set to use a custom Open Targets API endpoint. Default is set to the public API: `https://api.platform.opentargets.org/api/v4/graphql`.
+- **Name resolution**: set `OT_MCP_STRICT_RESOLUTION=true` to raise an error when a provided name/symbol cannot be resolved to a canonical ID. By default the server logs a warning and passes the input through unchanged.
 - **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000` provides flexible transport selection.
 - **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
 
@@ -210,6 +211,8 @@ The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biom
 ## Available Tools
 
 The server wraps **49** GraphQL operations from the [Open Targets Platform](https://platform-docs.opentargets.org/). Every tool returns structured JSON that mirrors the official schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
+
+Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `EFO_...`, `CHEMBL...`) or a human-readable name/symbol. When a name is provided, the server automatically resolves it to the best matching Open Targets ID.
 
 ### Quick-start shortcuts
 - `get_target_info` – Core target identity record (Ensembl IDs, synonyms, genomic coordinates)
