@@ -175,6 +175,136 @@ class MetaApi:
         """
         return await client._query(graphql_query, {"goIds": go_ids})
 
+    async def get_targets_batch(
+        self,
+        client: OpenTargetsClient,
+        ensembl_ids: List[str],
+    ) -> Dict[str, Any]:
+        """Retrieve multiple targets in a single request.
+
+        **When to use**
+        - Efficiently fetch data for a list of known target IDs
+        - Batch operations when exploring multiple genes
+        - Reduce API calls when you have multiple Ensembl IDs
+
+        **When not to use**
+        - Searching for targets by name (use `search_entities`)
+        - Getting detailed target data (use specific target tools)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `ensembl_ids` (`List[str]`): List of Ensembl IDs (e.g., `["ENSG00000157764", "ENSG00000146648"]`).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"targets": [{"id": str, "approvedSymbol": str, "approvedName": str, ...}, ...]}`.
+        """
+        graphql_query = """
+        query TargetsBatch($ensemblIds: [String!]!) {
+            targets(ensemblIds: $ensemblIds) {
+                id
+                approvedSymbol
+                approvedName
+                biotype
+                functionDescriptions
+                genomicLocation {
+                    chromosome
+                    start
+                    end
+                    strand
+                }
+                proteinIds {
+                    id
+                    source
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"ensemblIds": ensembl_ids})
+
+    async def get_diseases_batch(
+        self,
+        client: OpenTargetsClient,
+        efo_ids: List[str],
+    ) -> Dict[str, Any]:
+        """Retrieve multiple diseases in a single request.
+
+        **When to use**
+        - Efficiently fetch data for a list of known disease IDs
+        - Batch operations when exploring multiple conditions
+        - Reduce API calls when you have multiple EFO IDs
+
+        **When not to use**
+        - Searching for diseases by name (use `search_entities`)
+        - Getting detailed disease data (use specific disease tools)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `efo_ids` (`List[str]`): List of EFO IDs (e.g., `["EFO_0000270", "EFO_0000583"]`).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"diseases": [{"id": str, "name": str, "description": str, ...}, ...]}`.
+        """
+        graphql_query = """
+        query DiseasesBatch($efoIds: [String!]!) {
+            diseases(efoIds: $efoIds) {
+                id
+                name
+                description
+                therapeuticAreas {
+                    id
+                    name
+                }
+                synonyms {
+                    relation
+                    terms
+                }
+                dbXRefs
+            }
+        }
+        """
+        return await client._query(graphql_query, {"efoIds": efo_ids})
+
+    async def get_drugs_batch(
+        self,
+        client: OpenTargetsClient,
+        chembl_ids: List[str],
+    ) -> Dict[str, Any]:
+        """Retrieve multiple drugs in a single request.
+
+        **When to use**
+        - Efficiently fetch data for a list of known drug IDs
+        - Batch operations when exploring multiple compounds
+        - Reduce API calls when you have multiple ChEMBL IDs
+
+        **When not to use**
+        - Searching for drugs by name (use `search_entities`)
+        - Getting detailed drug data (use specific drug tools)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `chembl_ids` (`List[str]`): List of ChEMBL IDs (e.g., `["CHEMBL1201583", "CHEMBL3308093"]`).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"drugs": [{"id": str, "name": str, "drugType": str, ...}, ...]}`.
+        """
+        graphql_query = """
+        query DrugsBatch($chemblIds: [String!]!) {
+            drugs(chemblIds: $chemblIds) {
+                id
+                name
+                drugType
+                description
+                isApproved
+                hasBeenWithdrawn
+                maximumClinicalTrialPhase
+                yearOfFirstApproval
+                synonyms
+                tradeNames
+            }
+        }
+        """
+        return await client._query(graphql_query, {"chemblIds": chembl_ids})
+
     async def map_ids(
         self,
         client: OpenTargetsClient,
@@ -195,7 +325,7 @@ class MetaApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `query_terms` (`List[str]`): One or more free-text values such as `["BRAF", "melanoma", "rs12345"]`.
-        - `entity_names` (`Optional[List[str]]`): Optional subset of entity types (`"target"`, `"disease"`, `"drug"`, `"variant"`, `"study"`) to consider; defaults to target, disease, and drug.
+        - `entity_names` (`Optional[List[str]]`): Optional subset of entity types (`"target"`, `"disease"`, `"drug"`, `"variant"`, `"study"`) to consider; defaults to all five.
 
         **Returns**
         - `Dict[str, Any]`: GraphQL response `{"mapIds": {"total": int, "mappings": [...], "aggregations": {...}}}` where each mapping includes candidate hits with scores and entity metadata.

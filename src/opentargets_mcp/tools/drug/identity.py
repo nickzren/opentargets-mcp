@@ -2,14 +2,20 @@
 """
 Defines API methods and MCP tools related to a drug's identity and classification.
 """
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
+from ...utils import select_fields
 
 class DrugIdentityApi:
     """
     Contains methods to query a drug's identity and cross-references.
     """
-    async def get_drug_info(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
+    async def get_drug_info(
+        self,
+        client: OpenTargetsClient,
+        chembl_id: str,
+        fields: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Fetch identity, indication, and mechanism data for a drug.
 
         **When to use**
@@ -24,6 +30,7 @@ class DrugIdentityApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client session.
         - `chembl_id` (`str`): Identifier such as `"CHEMBL1862"`.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{ "drug": {"id": str, "name": str, "drugType": str, "isApproved": bool, "mechanismsOfAction": {...}, "indications": {...}, "linkedTargets": {...}, ...} }`.
@@ -94,7 +101,8 @@ class DrugIdentityApi:
             }
         }
         """
-        return await client._query(graphql_query, {"chemblId": chembl_id})
+        result = await client._query(graphql_query, {"chemblId": chembl_id})
+        return select_fields(result, fields)
 
     async def get_drug_cross_references(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
         """Retrieve cross-database identifiers related to a drug.

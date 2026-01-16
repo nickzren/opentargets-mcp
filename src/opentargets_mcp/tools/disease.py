@@ -2,15 +2,21 @@
 """
 Defines API methods and MCP tools related to 'Disease' entities in Open Targets.
 """
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient # Relative import
+from ..utils import select_fields
 
 class DiseaseApi:
     """
     Contains methods to query disease-specific data from the Open Targets GraphQL API.
     """
 
-    async def get_disease_info(self, client: OpenTargetsClient, efo_id: str) -> Dict[str, Any]:
+    async def get_disease_info(
+        self,
+        client: OpenTargetsClient,
+        efo_id: str,
+        fields: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Retrieve core metadata for an Open Targets disease entity.
 
         **When to use**
@@ -25,6 +31,7 @@ class DiseaseApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client instance.
         - `efo_id` (`str`): Disease identifier such as `"EFO_0003884"` or `"MONDO_0007254"`.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{ "disease": {"id": str, "name": str, "description": str, "synonyms": [...], "therapeuticAreas": [...], "dbXRefs": [...] } }`.
@@ -59,12 +66,14 @@ class DiseaseApi:
             }
         }
         """
-        return await client._query(graphql_query, {"efoId": efo_id})
+        result = await client._query(graphql_query, {"efoId": efo_id})
+        return select_fields(result, fields)
 
     async def get_disease_associated_targets(
         self,
         client: OpenTargetsClient,
         efo_id: str,
+        fields: Optional[List[str]] = None,
         page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
@@ -82,6 +91,7 @@ class DiseaseApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `efo_id` (`str`): Disease identifier.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
         - `page_index` (`int`): Zero-based page for pagination (default 0).
         - `page_size` (`int`): Number of associations per page (default 10).
 
@@ -123,7 +133,313 @@ class DiseaseApi:
             }
         }
         """
-        return await client._query(graphql_query, {"efoId": efo_id, "pageIndex": page_index, "pageSize": page_size})
+        result = await client._query(graphql_query, {"efoId": efo_id, "pageIndex": page_index, "pageSize": page_size})
+        return select_fields(result, fields)
+
+    async def get_disease_known_drugs(
+        self,
+        client: OpenTargetsClient,
+        efo_id: str,
+        size: int = 10,
+        cursor: Optional[str] = None,
+        free_text_query: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Retrieve drugs with investigational or approved indications for a disease.
+
+        **When to use**
+        - Answer "What drugs treat X disease?" questions
+        - Identify therapeutic options including clinical trial candidates
+        - Explore mechanism of action data for disease-drug relationships
+
+        **When not to use**
+        - Finding diseases for a drug (use `get_drug_linked_diseases`)
+        - Exploring target associations (use `get_disease_associated_targets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `efo_id` (`str`): Disease identifier such as `"EFO_0000583"`.
+        - `size` (`int`): Number of drug rows to return (default 10).
+        - `cursor` (`Optional[str]`): Pagination cursor from a previous call.
+        - `free_text_query` (`Optional[str]`): Filter results by a free-text query.
+
+        **Returns**
+        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "knownDrugs": {"count": int, "rows": [{"drug": {...}, "phase": int, "status": str, ...}]}}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate via the client.
+
+        **Example**
+        ```python
+        disease_api = DiseaseApi()
+        drugs = await disease_api.get_disease_known_drugs(client, "EFO_0000583", size=5)
+        for row in drugs["disease"]["knownDrugs"]["rows"]:
+            print(row["drug"]["name"], row["phase"])
+        ```
+        """
+        graphql_query = """
+        query DiseaseKnownDrugs($efoId: String!, $size: Int!, $cursor: String, $freeTextQuery: String) {
+            disease(efoId: $efoId) {
+                id
+                name
+                knownDrugs(size: $size, cursor: $cursor, freeTextQuery: $freeTextQuery) {
+                    count
+                    cursor
+                    rows {
+                        drugId
+                        targetId
+                        drug {
+                            id
+                            name
+                            drugType
+                            maximumClinicalTrialPhase
+                            isApproved
+                        }
+                        mechanismOfAction
+                        target {
+                            id
+                            approvedSymbol
+                        }
+                        disease {
+                            id
+                            name
+                        }
+                        phase
+                        status
+                        urls {
+                            name
+                            url
+                        }
+                    }
+                }
+            }
+        }
+        """
+        variables = {
+            "efoId": efo_id,
+            "size": size,
+            "cursor": cursor,
+            "freeTextQuery": free_text_query,
+        }
+        variables = {k: v for k, v in variables.items() if v is not None}
+        return await client._query(graphql_query, variables)
+
+    async def get_disease_ontology(
+        self,
+        client: OpenTargetsClient,
+        efo_id: str,
+    ) -> Dict[str, Any]:
+        """Retrieve ontology structure for a disease including parents, children, and ancestors.
+
+        **When to use**
+        - Navigate disease hierarchy ("What are the subtypes of cancer?")
+        - Find parent therapeutic areas for a specific disease
+        - Explore disease relationships in the EFO ontology
+
+        **When not to use**
+        - Getting disease metadata (use `get_disease_info`)
+        - Finding associated targets (use `get_disease_associated_targets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `efo_id` (`str`): Disease identifier such as `"EFO_0000270"`.
+
+        **Returns**
+        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "parents": [...], "children": [...], "ancestors": [...], "descendants": [...], "therapeuticAreas": [...], "isTherapeuticArea": bool}}`.
+
+        **Errors**
+        - GraphQL/network exceptions propagate via the client.
+        """
+        graphql_query = """
+        query DiseaseOntology($efoId: String!) {
+            disease(efoId: $efoId) {
+                id
+                name
+                description
+                isTherapeuticArea
+                parents {
+                    id
+                    name
+                }
+                children {
+                    id
+                    name
+                }
+                ancestors
+                descendants
+                therapeuticAreas {
+                    id
+                    name
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"efoId": efo_id})
+
+    async def get_disease_literature_occurrences(
+        self,
+        client: OpenTargetsClient,
+        efo_id: str,
+        additional_entity_ids: Optional[List[str]] = None,
+        start_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        end_year: Optional[int] = None,
+        end_month: Optional[int] = None,
+        cursor: Optional[str] = None,
+        size: Optional[int] = 20,
+    ) -> Dict[str, Any]:
+        """Return literature co-occurrence records mentioning a disease.
+
+        **When to use**
+        - Find publications discussing a specific disease
+        - Filter by co-mentioned entities (e.g., disease + target)
+        - Provide publication timelines with year filters
+
+        **When not to use**
+        - Looking for evidence data (use evidence tools)
+        - Finding disease-target associations (use `get_disease_associated_targets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `efo_id` (`str`): Disease identifier.
+        - `additional_entity_ids` (`Optional[List[str]]`): Co-filter on additional entities.
+        - `start_year` / `end_year` (`Optional[int]`): Restrict by publication year.
+        - `start_month` / `end_month` (`Optional[int]`): Optional month filters.
+        - `cursor` (`Optional[str]`): Pagination cursor.
+        - `size` (`Optional[int]`): Max rows to return (default 20).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"disease": {"literatureOcurrences": {"count": int, "rows": [{"pmid": str, "pmcid": str, "publicationDate": str}, ...]}}}`.
+        """
+        graphql_query = """
+        query DiseaseLiteratureOcurrences(
+            $efoId: String!,
+            $additionalIds: [String!],
+            $startYear: Int,
+            $startMonth: Int,
+            $endYear: Int,
+            $endMonth: Int,
+            $cursor: String
+        ) {
+            disease(efoId: $efoId) {
+                id
+                name
+                literatureOcurrences(
+                    additionalIds: $additionalIds,
+                    startYear: $startYear,
+                    startMonth: $startMonth,
+                    endYear: $endYear,
+                    endMonth: $endMonth,
+                    cursor: $cursor
+                ) {
+                    count
+                    filteredCount
+                    earliestPubYear
+                    cursor
+                    rows {
+                        pmid
+                        pmcid
+                        publicationDate
+                    }
+                }
+            }
+        }
+        """
+        variables = {
+            "efoId": efo_id,
+            "additionalIds": additional_entity_ids,
+            "startYear": start_year,
+            "startMonth": start_month,
+            "endYear": end_year,
+            "endMonth": end_month,
+            "cursor": cursor,
+        }
+        variables = {k: v for k, v in variables.items() if v is not None}
+
+        result = await client._query(graphql_query, variables)
+
+        if size is not None and isinstance(size, int) and size >= 0 and result.get("disease"):
+            literature = result["disease"].get("literatureOcurrences")
+            if literature and isinstance(literature, dict):
+                rows = literature.get("rows")
+                if isinstance(rows, list):
+                    literature["rows"] = rows[:size]
+
+        return result
+
+    async def get_disease_similar_entities(
+        self,
+        client: OpenTargetsClient,
+        efo_id: str,
+        threshold: Optional[float] = 0.5,
+        size: int = 10,
+        entity_names: Optional[List[str]] = None,
+        additional_entity_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Find semantically similar diseases based on PubMed embeddings.
+
+        **When to use**
+        - Expand disease scope ("What diseases are similar to asthma?")
+        - Find related conditions for comparative analysis
+        - Discover diseases with overlapping literature profiles
+
+        **When not to use**
+        - Finding disease subtypes (use `get_disease_ontology`)
+        - Looking for comorbidities (this is semantic similarity, not clinical)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `efo_id` (`str`): Disease identifier.
+        - `threshold` (`Optional[float]`): Minimum similarity score (0-1), default 0.5.
+        - `size` (`int`): Maximum similar diseases to return (default 10).
+        - `entity_names` (`Optional[List[str]]`): Entity types to include; defaults to `["disease"]`.
+        - `additional_entity_ids` (`Optional[List[str]]`): Additional entity IDs for similarity context.
+
+        **Returns**
+        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "similarEntities": [{"score": float, "object": {"id": str, "name": str}}, ...]}}`.
+        """
+        graphql_query = """
+        query DiseaseSimilarEntities(
+            $efoId: String!,
+            $threshold: Float,
+            $size: Int!,
+            $entityNames: [String!],
+            $additionalIds: [String!]
+        ) {
+            disease(efoId: $efoId) {
+                id
+                name
+                similarEntities(
+                    threshold: $threshold,
+                    size: $size,
+                    entityNames: $entityNames,
+                    additionalIds: $additionalIds
+                ) {
+                    score
+                    object {
+                        __typename
+                        ... on Disease {
+                            id
+                            name
+                            description
+                            therapeuticAreas {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+        variables = {
+            "efoId": efo_id,
+            "threshold": threshold,
+            "size": size,
+            "entityNames": entity_names or ["disease"],
+            "additionalIds": additional_entity_ids,
+        }
+        variables = {k: v for k, v in variables.items() if v is not None}
+        return await client._query(graphql_query, variables)
 
     async def get_disease_phenotypes(
         self,

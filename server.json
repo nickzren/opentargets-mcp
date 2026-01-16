@@ -9,13 +9,13 @@
     "source": "github",
     "id": "984363568"
   },
-  "version": "0.2.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "opentargets-mcp",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "transport": {
         "type": "stdio"
       }

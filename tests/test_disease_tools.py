@@ -38,3 +38,36 @@ class TestDiseaseTools:
         assert "disease" in result
         if result.get("disease"):
             assert "otarProjects" in result["disease"]
+
+    async def test_get_disease_known_drugs(self, client: OpenTargetsClient):
+        result = await self.disease_api.get_disease_known_drugs(client, TEST_DISEASE_ID_MELANOMA, size=3)
+        assert result is not None
+        assert "disease" in result
+        if result.get("disease"):
+            assert "knownDrugs" in result["disease"]
+            if result["disease"].get("knownDrugs"):
+                assert "count" in result["disease"]["knownDrugs"]
+                assert "rows" in result["disease"]["knownDrugs"]
+
+    async def test_get_disease_ontology(self, client: OpenTargetsClient):
+        result = await self.disease_api.get_disease_ontology(client, TEST_DISEASE_ID_ASTHMA)
+        assert result is not None
+        assert "disease" in result
+        if result.get("disease"):
+            assert "parents" in result["disease"]
+            assert "children" in result["disease"]
+            assert "therapeuticAreas" in result["disease"]
+
+    async def test_get_disease_literature_occurrences(self, client: OpenTargetsClient):
+        result = await self.disease_api.get_disease_literature_occurrences(client, TEST_DISEASE_ID_MELANOMA, size=5)
+        assert result is not None
+        assert "disease" in result
+        if result.get("disease"):
+            assert "literatureOcurrences" in result["disease"]
+
+    async def test_get_disease_similar_entities(self, client: OpenTargetsClient):
+        result = await self.disease_api.get_disease_similar_entities(client, TEST_DISEASE_ID_ASTHMA, size=5)
+        assert result is not None
+        assert "disease" in result
+        if result.get("disease"):
+            assert "similarEntities" in result["disease"]

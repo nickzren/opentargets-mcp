@@ -2,14 +2,20 @@
 """
 Defines API methods and MCP tools related to a target's identity and classification.
 """
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
+from ...utils import select_fields
 
 class TargetIdentityApi:
     """
     Contains methods to query a target's identity, classification, and cross-references.
     """
-    async def get_target_info(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+    async def get_target_info(
+        self,
+        client: OpenTargetsClient,
+        ensembl_id: str,
+        fields: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Retrieve core identity details for a target gene.
 
         **When to use**
@@ -24,6 +30,7 @@ class TargetIdentityApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier (`"ENSG..."`).
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "approvedName": str, "biotype": str, "functionDescriptions": [...], "synonyms": [...], "genomicLocation": {...}, "proteinIds": [...]}}`.
@@ -52,7 +59,8 @@ class TargetIdentityApi:
             }
         }
         """
-        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+        result = await client._query(graphql_query, {"ensemblId": ensembl_id})
+        return select_fields(result, fields)
 
     async def get_target_class(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
         """Return ChEMBL target class annotations for a gene.

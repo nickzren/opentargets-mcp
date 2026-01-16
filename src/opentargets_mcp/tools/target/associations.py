@@ -4,6 +4,7 @@ Defines API methods and MCP tools related to a target's associations.
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
+from ...utils import select_fields
 
 class TargetAssociationsApi:
     """
@@ -13,6 +14,7 @@ class TargetAssociationsApi:
         self,
         client: OpenTargetsClient,
         ensembl_id: str,
+        fields: Optional[List[str]] = None,
         page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
@@ -30,6 +32,7 @@ class TargetAssociationsApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
         - `page_index` (`int`): Zero-based page (default 0).
         - `page_size` (`int`): Number of disease rows per page (default 10).
 
@@ -60,12 +63,14 @@ class TargetAssociationsApi:
             }
         }
         """
-        return await client._query(graphql_query, {"ensemblId": ensembl_id, "pageIndex": page_index, "pageSize": page_size})
+        result = await client._query(graphql_query, {"ensemblId": ensembl_id, "pageIndex": page_index, "pageSize": page_size})
+        return select_fields(result, fields)
 
     async def get_target_known_drugs(
         self,
         client: OpenTargetsClient,
         ensembl_id: str,
+        fields: Optional[List[str]] = None,
         page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
@@ -83,6 +88,7 @@ class TargetAssociationsApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
         - `page_index` (`int`): Reserved pagination parameter (API returns all known drugs).
         - `page_size` (`int`): Reserved parameter for interface consistency.
 
@@ -131,7 +137,8 @@ class TargetAssociationsApi:
             }
         }
         """
-        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+        result = await client._query(graphql_query, {"ensemblId": ensembl_id})
+        return select_fields(result, fields)
 
     async def get_target_literature_occurrences(
         self,

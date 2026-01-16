@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import asyncio
-import logging
-import os
 import re
 from typing import Any, Iterable, Mapping
 
@@ -53,14 +51,29 @@ _ANY_ENTITY_ID_PATTERNS = (
 
 _PARAM_SPECS: Mapping[str, _ResolverSpec] = {
     "ensembl_id": _ResolverSpec(entity_names=("target",), id_patterns=_TARGET_ID_PATTERNS),
+    "ensembl_ids": _ResolverSpec(
+        entity_names=("target",),
+        id_patterns=_TARGET_ID_PATTERNS,
+        expects_list=True,
+    ),
     "entity_id": _ResolverSpec(entity_names=("target",), id_patterns=_TARGET_ID_PATTERNS),
     "efo_id": _ResolverSpec(entity_names=("disease",), id_patterns=_DISEASE_ID_PATTERNS),
+    "efo_ids": _ResolverSpec(
+        entity_names=("disease",),
+        id_patterns=_DISEASE_ID_PATTERNS,
+        expects_list=True,
+    ),
     "disease_ids": _ResolverSpec(
         entity_names=("disease",),
         id_patterns=_DISEASE_ID_PATTERNS,
         expects_list=True,
     ),
     "chembl_id": _ResolverSpec(entity_names=("drug",), id_patterns=_DRUG_ID_PATTERNS),
+    "chembl_ids": _ResolverSpec(
+        entity_names=("drug",),
+        id_patterns=_DRUG_ID_PATTERNS,
+        expects_list=True,
+    ),
     "variant_id": _ResolverSpec(entity_names=("variant",), id_patterns=_VARIANT_ID_PATTERNS),
     "study_id": _ResolverSpec(entity_names=("study",), id_patterns=_STUDY_ID_PATTERNS),
     "additional_entity_ids": _ResolverSpec(
@@ -71,8 +84,6 @@ _PARAM_SPECS: Mapping[str, _ResolverSpec] = {
 }
 
 _meta_api = MetaApi()
-_logger = logging.getLogger(__name__)
-_strict_resolution = os.getenv("OT_MCP_STRICT_RESOLUTION", "").lower() in {"1", "true", "yes"}
 
 
 def _looks_like_id(value: str, patterns: Iterable[re.Pattern[str]]) -> bool:
@@ -132,9 +143,7 @@ async def resolve_param(
         resolved_map, missing = await _resolve_terms(client, unresolved, spec)
         if missing:
             message = f"Unable to resolve {name}: {', '.join(missing)}"
-            if _strict_resolution:
-                raise ValidationError(message)
-            _logger.warning("%s; passing through unchanged", message)
+            raise ValidationError(message)
         resolved_list = []
         for term in value:
             if isinstance(term, str):
@@ -149,9 +158,7 @@ async def resolve_param(
     resolved_map, missing = await _resolve_terms(client, [value], spec)
     if missing:
         message = f"Unable to resolve {name}: {value}"
-        if _strict_resolution:
-            raise ValidationError(message)
-        _logger.warning("%s; passing through unchanged", message)
+        raise ValidationError(message)
     return resolved_map.get(value, value)
 
 

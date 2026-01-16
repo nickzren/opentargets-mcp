@@ -1,12 +1,10 @@
 # Open Targets MCP Server
 
 [![CI](https://img.shields.io/github/actions/workflow/status/nickzren/opentargets-mcp/ci.yml?label=CI)](https://github.com/nickzren/opentargets-mcp/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-Pytest-0A9EDC?logo=pytest)](tests/)
+[![PyPI](https://img.shields.io/pypi/v/opentargets-mcp)](https://pypi.org/project/opentargets-mcp/)
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-Server-00ADD8?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMyA3VjE3TDEyIDIyTDIxIDE3VjdMMTIgMloiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4=)](https://github.com/modelcontextprotocol)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/v0/servers?search=nickzren/opentargets&version=latest)
 [![Open Targets](https://img.shields.io/badge/Open%20Targets-Platform-5C85DE)](https://platform.opentargets.org/)
-[![Docs](https://img.shields.io/badge/Docs-Available-blue)](README.md)
 [![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](LICENSE)
 
 A Model Context Protocol (MCP) server that exposes the Open Targets Platform GraphQL API as a set of tools for use with Claude Desktop and other MCP-compatible clients.
@@ -15,9 +13,12 @@ A Model Context Protocol (MCP) server that exposes the Open Targets Platform Gra
 
 ## Quick Install
 
-### For Claude Desktop
+### Option 1: Run once with `uvx` (no install)
+```bash
+uvx --from git+https://github.com/nickzren/opentargets-mcp opentargets-mcp
+```
 
-#### Option 1: Using MCPM (Recommended)
+### Option 2: Claude Desktop (MCPM)
 ```bash
 # Install mcpm package manager
 pip install mcpm
@@ -26,40 +27,18 @@ pip install mcpm
 mcpm install opentargets
 ```
 
-#### Option 2: Manual Setup
-```bash
-# Clone and setup
-git clone https://github.com/nickzren/opentargets-mcp
-cd opentargets-mcp
-pip install uv
-uv sync
-
-# Import to Claude Desktop (stdio transport)
-mcpm import stdio opentargets \
-  --command "$(uv run which python)" \
-  --args "-m opentargets_mcp.server --transport stdio"
-```
-
-Then restart Claude Desktop to start using the Open Targets tools.
-
-
-
-### For Other MCP Clients
-
-#### Option 1: Manual Setup
+### Option 3: Local install (dev or self-host)
 ```bash
 git clone https://github.com/nickzren/opentargets-mcp
 cd opentargets-mcp
 pip install uv
 uv sync
 
-# Option 1: Use the simple runner script (thin wrapper around uv run)
-./run.sh
-
-# Option 2: Run directly
+# Run (stdio transport by default)
 uv run python -m opentargets_mcp.server
 ```
-#### Option 2: Using Docker
+
+### Option 4: Docker
 ```bash
 git clone https://github.com/nickzren/opentargets-mcp
 cd opentargets-mcp
@@ -70,6 +49,15 @@ docker-compose up -d --build
 Note: the default transport is `http` for docker deployments.
 
 See the configuration section below for details and how to set ports and other environment variables.
+
+### Claude Desktop Manual Import (optional)
+```bash
+mcpm import stdio opentargets \
+  --command "$(uv run which python)" \
+  --args "-m opentargets_mcp.server --transport stdio"
+```
+
+Then restart Claude Desktop to start using the Open Targets tools.
 
 ## Features
 
@@ -151,7 +139,8 @@ uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 ### Configuration
 
 - **Environment variables**: `MCP_TRANSPORT` (`stdio`, `sse`, or `http`), `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` control the transport and bind address. Defaults are `stdio`, `0.0.0.0`, and `8000`. `OPEN_TARGETS_API_URL` can be set to use a custom Open Targets API endpoint. Default is set to the public API: `https://api.platform.opentargets.org/api/v4/graphql`.
-- **Name resolution**: set `OT_MCP_STRICT_RESOLUTION=true` to raise an error when a provided name/symbol cannot be resolved to a canonical ID. By default the server logs a warning and passes the input through unchanged.
+- **Name resolution**: strict; unresolved names raise a clear error (use `search_entities` to find canonical IDs).
+- **Tool selection guidance**: the server sends a short policy to clients to prefer curated tools, use `fields` to trim output, and reserve raw GraphQL for edge cases.
 - **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000` provides flexible transport selection.
 - **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
 
@@ -210,9 +199,11 @@ The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biom
 
 ## Available Tools
 
-The server wraps **49** GraphQL operations from the [Open Targets Platform](https://platform-docs.opentargets.org/). Every tool returns structured JSON that mirrors the official schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
+The server wraps **59** curated GraphQL operations from the [Open Targets Platform](https://platform-docs.opentargets.org/). Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
 
 Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `EFO_...`, `CHEMBL...`) or a human-readable name/symbol. When a name is provided, the server automatically resolves it to the best matching Open Targets ID.
+Core tools also accept an optional `fields` list (dot-paths) to filter the response payload.
+For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when no curated tool fits.
 
 ### Quick-start shortcuts
 - `get_target_info` – Core target identity record (Ensembl IDs, synonyms, genomic coordinates)
@@ -226,14 +217,16 @@ Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `EFO_..
 
 ### Full catalog by category
 - **Target identity & biology (20 tools)** — `get_target_info`, `get_target_class`, `get_target_alternative_genes`, `get_target_associated_diseases`, `get_target_known_drugs`, `get_target_literature_occurrences`, `get_target_expression`, `get_target_pathways_and_go_terms`, `get_target_homologues`, `get_target_subcellular_locations`, `get_target_genetic_constraint`, `get_target_mouse_phenotypes`, `get_target_hallmarks`, `get_target_depmap_essentiality`, `get_target_interactions`, `get_target_safety_information`, `get_target_tractability`, `get_target_chemical_probes`, `get_target_tep`, `get_target_prioritization`.
-- **Disease analytics (4 tools)** — `get_disease_info`, `get_disease_associated_targets`, `get_disease_phenotypes`, `get_disease_otar_projects`.
-- **Drug profiling (7 tools)** — `get_drug_info`, `get_drug_cross_references`, `get_drug_linked_diseases`, `get_drug_linked_targets`, `get_drug_adverse_events`, `get_drug_pharmacovigilance`, `get_drug_warnings`.
+- **Disease analytics (8 tools)** — `get_disease_info`, `get_disease_associated_targets`, `get_disease_phenotypes`, `get_disease_otar_projects`, `get_disease_known_drugs`, `get_disease_ontology`, `get_disease_literature_occurrences`, `get_disease_similar_entities`.
+- **Drug profiling (10 tools)** — `get_drug_info`, `get_drug_cross_references`, `get_drug_linked_diseases`, `get_drug_linked_targets`, `get_drug_adverse_events`, `get_drug_pharmacovigilance`, `get_drug_warnings`, `get_drug_pharmacogenomics`, `get_drug_literature_occurrences`, `get_drug_similar_entities`.
 - **Evidence synthesis (2 tools)** — `get_target_disease_evidence`, `get_target_disease_biomarkers`.
 - **Search & discovery (4 tools)** — `search_entities`, `search_suggestions`, `get_similar_targets`, `search_facets`.
+- **Batch lookups (3 tools)** — `get_targets_batch`, `get_diseases_batch`, `get_drugs_batch`.
 - **Variant interpretation (6 tools)** — `get_variant_info`, `get_variant_credible_sets`, `get_variant_pharmacogenomics`, `get_variant_evidences`, `get_variant_intervals`, `get_variant_protein_coordinates`.
 - **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
+- **Advanced GraphQL (2 tools)** — `graphql_schema` (SDL), `graphql_query` (structured result envelope: `status`, `result`, `message`).
 
-Each grouping matches the data domains described in the Open Targets docs (targets, diseases, drugs, evidence, variants, and studies). For high-volume workloads, respect the platform's throttling guidance from the official API FAQ and cache downstream where possible.
+Each grouping matches the data domains described in the Open Targets docs (targets, diseases, drugs, evidence, variants, and studies). For high-volume workloads, respect the platform's throttling guidance from the Open Targets API FAQ and cache downstream where possible.
 
 ## Development
 

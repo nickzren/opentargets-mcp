@@ -1,6 +1,6 @@
 [project]
 name = "opentargets-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "MCP server for Open Targets Platform biomedical data access"
 authors = [{name = "Nick Ren"}]
 license = {text = "MIT"}
@@ -19,6 +19,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=2.0.0",
     "aiohttp",
+    "graphql-core>=3.2",
     "python-dotenv",
 ]
 
@@ -45,6 +46,7 @@ dev = [
     "mcp",
     "pytest",
     "pytest-asyncio",
+    "thefuzz",
     "black",
     "ruff",
 ]

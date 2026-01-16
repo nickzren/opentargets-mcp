@@ -7,6 +7,7 @@ registration and dispatching directly in `opentargets_mcp.server`.
 from .disease import DiseaseApi
 from .drug import DrugApi
 from .evidence import EvidenceApi
+from .graphql import GraphqlApi
 from .meta import MetaApi
 from .search import SearchApi
 from .study import StudyApi
@@ -17,6 +18,7 @@ __all__ = [
     "DiseaseApi",
     "DrugApi",
     "EvidenceApi",
+    "GraphqlApi",
     "MetaApi",
     "SearchApi",
     "StudyApi",

@@ -19,6 +19,7 @@ from .queries import OpenTargetsClient
 from .tools.disease import DiseaseApi
 from .tools.drug import DrugApi
 from .tools.evidence import EvidenceApi
+from .tools.graphql import GraphqlApi
 from .tools.meta import MetaApi
 from .tools.search import SearchApi
 from .tools.study import StudyApi
@@ -83,7 +84,18 @@ async def lifespan(server: FastMCP):
 # ---------------------------------------------------------------------------
 mcp = FastMCP(
     name="opentargets",
-    version="0.2.0",
+    version="0.4.0",
+    instructions=(
+        "Tool selection policy:\n"
+        "1) If you have a name/symbol, call the relevant tool directly (IDs are auto-resolved).\n"
+        "2) Use get_{entity}_info for basic lookup.\n"
+        "3) Use get_{entity}_associated_* for relationships.\n"
+        "4) Use get_{entity}_known_drugs for therapeutics.\n"
+        "5) Use fields=[...] to limit output when you only need specific fields.\n"
+        "6) If a name fails to resolve, call search_entities to find the canonical ID.\n"
+        "7) Use graphql_query only if no curated tool fits.\n"
+    ),
+    mask_error_details=True,
     lifespan=lifespan,
 )
 
@@ -95,6 +107,7 @@ _search_api = SearchApi()
 _variant_api = VariantApi()
 _study_api = StudyApi()
 _meta_api = MetaApi()
+_graphql_api = GraphqlApi()
 
 
 class _ToolDocMetadata(NamedTuple):
@@ -148,6 +161,9 @@ def register_all_api_methods() -> None:
         _meta_api,
     )
 
+    if _graphql_api is not None:
+        api_instances = (*api_instances, _graphql_api)
+
     for api in api_instances:
         for name in dir(api):
             if name.startswith("_"):
@@ -163,6 +179,7 @@ def register_all_api_methods() -> None:
             tool_decorator = mcp.tool(
                 name=name,
                 description=doc_meta.description,
+                annotations={"readOnlyHint": True},
             )
             tool_decorator(wrapper)
             logger.debug("Registered tool: %s", name)

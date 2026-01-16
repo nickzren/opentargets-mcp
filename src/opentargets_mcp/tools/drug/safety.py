@@ -117,6 +117,75 @@ class DrugSafetyApi:
         """
         return await client._query(graphql_query, {"chemblId": chembl_id})
 
+    async def get_drug_pharmacogenomics(
+        self,
+        client: OpenTargetsClient,
+        chembl_id: str,
+        page_index: int = 0,
+        page_size: int = 10,
+    ) -> Dict[str, Any]:
+        """Retrieve pharmacogenomics data linking genetic variants to drug response.
+
+        **When to use**
+        - Find genetic variants that affect response to this drug
+        - Support personalized medicine decisions
+        - Explore genotype-phenotype relationships for drug efficacy/toxicity
+
+        **When not to use**
+        - Getting general drug safety (use `get_drug_adverse_events`)
+        - Finding drug targets (use `get_drug_linked_targets`)
+
+        **Parameters**
+        - `client` (`OpenTargetsClient`): GraphQL client.
+        - `chembl_id` (`str`): Drug identifier.
+        - `page_index` (`int`): Zero-based page (default 0).
+        - `page_size` (`int`): Number of rows per page (default 10).
+
+        **Returns**
+        - `Dict[str, Any]`: `{"drug": {"id": str, "name": str, "pharmacogenomics": [...]}}`.
+
+        **Example**
+        ```python
+        safety_api = DrugSafetyApi()
+        pgx = await safety_api.get_drug_pharmacogenomics(client, "CHEMBL3308093")
+        for entry in pgx["drug"]["pharmacogenomics"]:
+            print(entry["genotype"], entry["phenotypeText"])
+        ```
+        """
+        graphql_query = """
+        query DrugPharmacogenomics($chemblId: String!, $pageIndex: Int!, $pageSize: Int!) {
+            drug(chemblId: $chemblId) {
+                id
+                name
+                pharmacogenomics(page: {index: $pageIndex, size: $pageSize}) {
+                    variantId
+                    variantRsId
+                    genotype
+                    genotypeId
+                    genotypeAnnotationText
+                    phenotypeText
+                    phenotypeFromSourceId
+                    pgxCategory
+                    evidenceLevel
+                    datasourceId
+                    studyId
+                    literature
+                    isDirectTarget
+                    targetFromSourceId
+                    target {
+                        id
+                        approvedSymbol
+                    }
+                    variantFunctionalConsequence {
+                        id
+                        label
+                    }
+                }
+            }
+        }
+        """
+        return await client._query(graphql_query, {"chemblId": chembl_id, "pageIndex": page_index, "pageSize": page_size})
+
     async def get_drug_warnings(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
         """Fetch detailed regulatory warnings, including withdrawals and boxed labels.
 

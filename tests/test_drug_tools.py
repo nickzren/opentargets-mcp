@@ -62,3 +62,24 @@ class TestDrugTools:
         assert "drug" in result
         if result.get("drug"):
             assert "crossReferences" in result["drug"]
+
+    async def test_get_drug_pharmacogenomics(self, client: OpenTargetsClient):
+        result = await self.drug_api.get_drug_pharmacogenomics(client, TEST_DRUG_ID_OSIMERTINIB, page_size=5)
+        assert result is not None
+        assert "drug" in result
+        if result.get("drug"):
+            assert "pharmacogenomics" in result["drug"]
+
+    async def test_get_drug_literature_occurrences(self, client: OpenTargetsClient):
+        result = await self.drug_api.get_drug_literature_occurrences(client, TEST_DRUG_ID_VEMURAFENIB, size=5)
+        assert result is not None
+        assert "drug" in result
+        if result.get("drug"):
+            assert "literatureOcurrences" in result["drug"]
+
+    async def test_get_drug_similar_entities(self, client: OpenTargetsClient):
+        result = await self.drug_api.get_drug_similar_entities(client, TEST_DRUG_ID_VEMURAFENIB, size=5)
+        assert result is not None
+        assert "drug" in result
+        if result.get("drug"):
+            assert "similarEntities" in result["drug"]

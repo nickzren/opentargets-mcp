@@ -1,6 +1,6 @@
 """Utility functions for Open Targets MCP server."""
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
 
 def filter_none_values(variables: Dict[str, Any]) -> Dict[str, Any]:
@@ -43,3 +43,32 @@ def generate_cache_key(query: str, variables: Optional[Dict[str, Any]] = None) -
     # Use JSON serialization with sorted keys for consistent, collision-free cache keys
     vars_str = json.dumps(variables, sort_keys=True, separators=(',', ':'))
     return f"{query}:{vars_str}"
+
+
+def select_fields(payload: Any, fields: Optional[Iterable[str]] = None) -> Any:
+    """Return a filtered payload containing only the requested field paths."""
+    if not fields:
+        return payload
+
+    tree: dict[str, Any] = {}
+    for path in fields:
+        if not path:
+            continue
+        node = tree
+        for part in filter(None, path.split(".")):
+            node = node.setdefault(part, {})
+
+    def project(value: Any, spec: dict[str, Any]) -> Any:
+        if not spec:
+            return value
+        if isinstance(value, list):
+            return [project(item, spec) for item in value]
+        if isinstance(value, dict):
+            output: dict[str, Any] = {}
+            for key, child in spec.items():
+                if key in value:
+                    output[key] = project(value[key], child)
+            return output
+        return value
+
+    return project(payload, tree)

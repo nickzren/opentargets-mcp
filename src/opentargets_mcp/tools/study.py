@@ -4,13 +4,19 @@ Defines API methods and MCP tools related to 'Study' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
+from ..utils import select_fields
 
 class StudyApi:
     """
     Contains methods to query study-specific data from the Open Targets GraphQL API.
     """
 
-    async def get_study_info(self, client: OpenTargetsClient, study_id: str) -> Dict[str, Any]:
+    async def get_study_info(
+        self,
+        client: OpenTargetsClient,
+        study_id: str,
+        fields: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Retrieve metadata and cohort details for a GWAS study.
 
         **When to use**
@@ -25,6 +31,7 @@ class StudyApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `study_id` (`str`): Study identifier such as `"GCST90002357"`.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"study": {"id": str, "studyType": str, "traitFromSource": str, "publicationTitle": str, "nSamples": int, ...}}`.
@@ -101,7 +108,8 @@ class StudyApi:
             }
         }
         """
-        return await client._query(graphql_query, {"studyId": study_id})
+        result = await client._query(graphql_query, {"studyId": study_id})
+        return select_fields(result, fields)
 
     async def get_studies_by_disease(
         self,

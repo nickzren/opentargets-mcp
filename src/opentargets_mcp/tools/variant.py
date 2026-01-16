@@ -4,13 +4,19 @@ Defines API methods and MCP tools related to 'Variant' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
+from ..utils import select_fields
 
 class VariantApi:
     """
     Contains methods to query variant-specific data from the Open Targets GraphQL API.
     """
 
-    async def get_variant_info(self, client: OpenTargetsClient, variant_id: str) -> Dict[str, Any]:
+    async def get_variant_info(
+        self,
+        client: OpenTargetsClient,
+        variant_id: str,
+        fields: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Retrieve core metadata and functional annotations for a variant.
 
         **When to use**
@@ -25,6 +31,7 @@ class VariantApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `variant_id` (`str`): Identifier such as `"7_140453136_A_T"`.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"variant": {"id": str, "variantDescription": str, "chromosome": str, "position": int, "rsIds": [...], "transcriptConsequences": [...], ...}}`.
@@ -86,7 +93,8 @@ class VariantApi:
             }
         }
         """
-        return await client._query(graphql_query, {"variantId": variant_id})
+        result = await client._query(graphql_query, {"variantId": variant_id})
+        return select_fields(result, fields)
 
     async def get_variant_credible_sets(
         self,
