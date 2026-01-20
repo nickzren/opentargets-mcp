@@ -7,7 +7,7 @@ import inspect
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, Optional
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -110,21 +110,10 @@ _meta_api = MetaApi()
 _graphql_api = GraphqlApi()
 
 
-class _ToolDocMetadata(NamedTuple):
-    title: str | None
-    description: str | None
-
-
-def _extract_tool_doc_metadata(method: Callable[..., Any]) -> _ToolDocMetadata:
-    """Convert a method docstring into FastMCP metadata."""
+def _extract_tool_description(method: Callable[..., Any]) -> str | None:
+    """Extract docstring from a method for FastMCP metadata."""
     doc = inspect.getdoc(method)
-    if not doc:
-        return _ToolDocMetadata(title=None, description=None)
-
-    lines = doc.splitlines()
-    summary = lines[0].strip() if lines else None
-    description = doc.strip()
-    return _ToolDocMetadata(title=summary, description=description)
+    return doc.strip() if doc else None
 
 
 def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
@@ -175,10 +164,10 @@ def register_all_api_methods() -> None:
                 logger.debug("Tool already registered: %s", name)
                 continue
             wrapper = _make_tool_wrapper(method)
-            doc_meta = _extract_tool_doc_metadata(method)
+            description = _extract_tool_description(method)
             tool_decorator = mcp.tool(
                 name=name,
-                description=doc_meta.description,
+                description=description,
                 annotations={"readOnlyHint": True},
             )
             tool_decorator(wrapper)
