@@ -24,6 +24,10 @@ _TARGET_ID_PATTERNS = (
 _DISEASE_ID_PATTERNS = (
     re.compile(r"^EFO_\d+$"),
     re.compile(r"^MONDO_\d+$"),
+    re.compile(r"^Orphanet_\d+$"),
+    re.compile(r"^HP_\d+$"),
+    re.compile(r"^DOID_\d+$"),
+    re.compile(r"^OTAR_\d+$"),
 )
 _DRUG_ID_PATTERNS = (
     re.compile(r"^CHEMBL\d+$"),

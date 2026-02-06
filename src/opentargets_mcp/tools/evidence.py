@@ -3,7 +3,8 @@
 Defines API methods and MCP tools related to 'Evidence' linking targets and diseases.
 """
 from typing import Any, Dict, List, Optional
-from ..queries import OpenTargetsClient # Relative import
+from ..queries import OpenTargetsClient
+from ..utils import filter_none_values, select_fields, validate_required_int
 
 class EvidenceApi:
     """
@@ -17,7 +18,8 @@ class EvidenceApi:
         efo_id: str,
         datasource_ids: Optional[List[str]] = None,
         size: int = 10,
-        cursor: Optional[str] = None
+        cursor: Optional[str] = None,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Retrieve evidence strings linking a target to a disease.
 
@@ -37,6 +39,7 @@ class EvidenceApi:
         - `datasource_ids` (`Optional[List[str]]`): Restrict to specific datasource IDs (e.g., `["eva", "ot_crispr"]`).
         - `size` (`int`): Maximum evidence rows to return per page (default 10).
         - `cursor` (`Optional[str]`): Cursor token from a previous call for pagination.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"target": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "datasourceId": str, "datatypeId": str, ...}], ...}}}`.
@@ -95,23 +98,25 @@ class EvidenceApi:
             }
         }
         """
+        validated_size = validate_required_int(size, "size")
         variables = {
             "ensemblId": ensembl_id,
             "efoId": efo_id,
             "datasourceIds": datasource_ids,
-            "size": size,
-            "cursor": cursor
+            "size": validated_size,
+            "cursor": cursor,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
+        result = await client._query(graphql_query, filter_none_values(variables))
+        return select_fields(result, fields)
 
     async def get_target_disease_biomarkers(
         self,
         client: OpenTargetsClient,
         ensembl_id: str,
         efo_id: str,
-        size: int = 10, # Number of evidence strings to check for biomarkers
-        cursor: Optional[str] = None
+        size: int = 10,
+        cursor: Optional[str] = None,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Inspect evidence for biomarker annotations linking a target and disease.
 
@@ -130,9 +135,10 @@ class EvidenceApi:
         - `efo_id` (`str`): Disease identifier.
         - `size` (`int`): Maximum evidence strings per page (default 10).
         - `cursor` (`Optional[str]`): Pagination cursor from a previous response.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
-        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "cursor": str}}}`. Presence of biomarker fields depends on datasource.
+        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "filteredCount": int, "unfilteredCount": int, "cursor": str}}}` where `count`/`filteredCount` reflect post-filtering rows. Presence of biomarker fields depends on datasource.
 
         **Errors**
         - GraphQL and transport errors propagate from `OpenTargetsClient`.
@@ -146,8 +152,6 @@ class EvidenceApi:
         print(biomarker_rows["target"]["evidences"]["rows"][0].get("biomarkerName"))
         ```
         """
-        # Biomarkers are often part of the evidence strings.
-        # The query provided by Claude looks for 'biomarkerName' and 'biomarkers' within evidence.
         graphql_query = """
         query TargetDiseaseBiomarkers(
             $ensemblId: String!,
@@ -160,31 +164,29 @@ class EvidenceApi:
                     count
                     cursor
                     rows {
-                        id # Evidence ID
+                        id
                         score
                         datasourceId
                         datatypeId
-                        # Fields relevant to biomarkers as suggested by Claude's query
-                        biomarkerName # If available directly
-                        # The 'biomarkers' object in Claude's query might be specific to certain datasources
-                        # or a simplified representation. The actual API might structure this differently.
-                        # Let's try to query for fields that are likely to contain biomarker info.
-                        # This might be within specific evidence types (e.g., clinical trials).
-                        # For now, we'll fetch general evidence and the client might need to parse.
-                        # If a specific 'biomarkers' field exists on evidence rows, it would be here.
-                        # The platform schema doesn't show a generic 'biomarkers' field on the EvidenceRow.
-                        # It's usually within specific evidence types like DrugEvidence -> biomarker.
-                        # Example for DrugEvidence (if this evidence row is of that type):
-                        # ... on DrugEvidence {
-                        #   biomarker {
-                        #     name
-                        #     geneExpression { name, id { id, name } }
-                        #     geneticVariation { id, name, functionalConsequenceId { id, label } }
-                        #   }
-                        # }
-                        # To get this, we'd need to use GraphQL fragments for different evidence types.
-                        # For simplicity now, we'll return the evidence rows and users can inspect.
-                        # A more advanced version could use fragments.
+                        biomarkerName
+                        biomarkers {
+                            geneticVariation {
+                                id
+                                name
+                                functionalConsequenceId {
+                                    id
+                                    label
+                                }
+                            }
+                            geneExpression {
+                                name
+                                id { id, name }
+                            }
+                        }
+                        biomarkerList {
+                            name
+                            description
+                        }
                         disease { id, name }
                         target { id, approvedSymbol }
                     }
@@ -192,14 +194,29 @@ class EvidenceApi:
             }
         }
         """
-        # This tool will return evidence strings. The presence and structure of biomarker
-        # data within these strings can vary. Users may need to inspect the results,
-        # particularly if the evidence comes from clinical trials or specific biomarker studies.
+        validated_size = validate_required_int(size, "size")
         variables = {
             "ensemblId": ensembl_id,
             "efoId": efo_id,
-            "size": size,
-            "cursor": cursor
+            "size": validated_size,
+            "cursor": cursor,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
+        result = await client._query(graphql_query, filter_none_values(variables))
+
+        evidences = result.get("target", {}).get("evidences", {})
+        rows = evidences.get("rows", [])
+        if isinstance(rows, list):
+            biomarker_rows = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if row.get("biomarkerName") or row.get("biomarkers") or row.get(
+                    "biomarkerList"
+                ):
+                    biomarker_rows.append(row)
+            evidences["unfilteredCount"] = len(rows)
+            evidences["rows"] = biomarker_rows
+            evidences["count"] = len(biomarker_rows)
+            evidences["filteredCount"] = len(biomarker_rows)
+
+        return select_fields(result, fields)

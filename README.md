@@ -2,7 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/nickzren/opentargets-mcp/ci.yml?label=CI)](https://github.com/nickzren/opentargets-mcp/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/opentargets-mcp)](https://pypi.org/project/opentargets-mcp/)
-[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/v0/servers?search=nickzren/opentargets&version=latest)
 [![Open Targets](https://img.shields.io/badge/Open%20Targets-Platform-5C85DE)](https://platform.opentargets.org/)
 [![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](LICENSE)
@@ -70,6 +70,17 @@ Then restart Claude Desktop to start using the Open Targets tools.
 - **Variant Analysis**: Query genetic variants, GWAS credible sets, and pharmacogenomics data
 - **Study Exploration**: Access GWAS studies with L2G predictions and fine-mapped loci
 - **Smart Search**: Entity resolution with synonym handling, autocomplete, and ID mapping
+- **Cross-Entity Workflows**: Multi-hop tools that chain disease, target, and drug evidence for prioritization
+- **Raw GraphQL Power Tools**: Run single and batch raw GraphQL operations with structured status envelopes
+
+## Why This Server
+
+This implementation is designed for practical Open Targets workflows:
+
+- **Curated breadth**: 65 curated tools plus 3 advanced GraphQL tools (68 total), spanning target, disease, drug, evidence, variant, study, metadata, and cross-entity workflow tasks.
+- **Safer automation**: strict ID resolution, typed parameter handling, and resilient retry behavior.
+- **Lower token overhead**: optional `fields` filters on core domain tools to return only what you need.
+- **Flexible power mode**: raw GraphQL tools are available for edge cases.
 
 ### Data Sources
 
@@ -120,7 +131,7 @@ The MCP server acts as a bridge between client applications and the Open Targets
 
 ## Prerequisites
 
-- Python 3.12+ with pip
+- Python 3.10+ with pip
 
 ## Usage
 
@@ -132,17 +143,24 @@ The MCP server acts as a bridge between client applications and the Open Targets
 # Or run directly with uv (stdio transport by default)
 uv run python -m opentargets_mcp.server
 
+# Installed entrypoints
+opentargets-mcp --help
+
 # Specify transport explicitly
 uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 ```
 
 ### Configuration
 
-- **Environment variables**: `MCP_TRANSPORT` (`stdio`, `sse`, or `http`), `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` control the transport and bind address. Defaults are `stdio`, `0.0.0.0`, and `8000`. `OPEN_TARGETS_API_URL` can be set to use a custom Open Targets API endpoint. Default is set to the public API: `https://api.platform.opentargets.org/api/v4/graphql`.
+- **Environment variables**: Transport/bind use `MCP_TRANSPORT`, `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` (defaults: `stdio`, `0.0.0.0`, `8000`). API endpoint uses `OPEN_TARGETS_API_URL` (default: `https://api.platform.opentargets.org/api/v4/graphql`). For local-only development, prefer `FASTMCP_SERVER_HOST=127.0.0.1`.
+- **Validated settings**: environment configuration is parsed with a typed settings model at startup (`src/opentargets_mcp/settings.py`), so invalid values fail fast.
 - **Name resolution**: strict; unresolved names raise a clear error (use `search_entities` to find canonical IDs).
 - **Tool selection guidance**: the server sends a short policy to clients to prefer curated tools, use `fields` to trim output, and reserve raw GraphQL for edge cases.
-- **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000` provides flexible transport selection.
+- **Pagination guardrails**: tool wrappers enforce `page_index >= 0`, `page_size >= 1`, and a global `page_size <= 500`.
+- **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000 --api <url>` provides flexible transport and endpoint selection.
 - **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
+- **CLI helpers**: `--list-tools` prints all registered tools, and `--version` prints the package version.
+- **Rate limiting**: `OPEN_TARGETS_RATE_LIMIT_RPS` and `OPEN_TARGETS_RATE_LIMIT_BURST` can enable global server-side rate limiting. `--rate-limiting` and `OPEN_TARGETS_RATE_LIMIT_ENABLED=true` are also supported.
 
 ### Transport Modes
 
@@ -199,10 +217,11 @@ The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biom
 
 ## Available Tools
 
-The server wraps **59** curated GraphQL operations from the [Open Targets Platform](https://platform-docs.opentargets.org/). Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
+The server wraps **68** operations from the [Open Targets Platform](https://platform-docs.opentargets.org/): **65 curated tools** plus **3 advanced GraphQL tools**. Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
 
 Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `EFO_...`, `CHEMBL...`) or a human-readable name/symbol. When a name is provided, the server automatically resolves it to the best matching Open Targets ID.
-Core tools also accept an optional `fields` list (dot-paths) to filter the response payload.
+Many core tools accept an optional `fields` list (dot-paths) to filter the response payload.
+`search_entities` also returns `search.triples` for compact `{id, entity, name}` consumption.
 For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when no curated tool fits.
 
 ### Quick-start shortcuts
@@ -214,6 +233,8 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
 - `get_disease_associated_targets` – Prioritised target list for an EFO disease
 - `get_target_known_drugs` – Approved and investigational agents for a target
 - `get_target_disease_evidence` – Evidence details across genetics, expression, and literature
+- `get_drug_repurposing_candidates` – Multi-hop disease -> target -> drug candidate prioritization
+- `graphql_batch_query` – Run one GraphQL query across many variable sets
 
 ### Full catalog by category
 - **Target identity & biology (20 tools)** — `get_target_info`, `get_target_class`, `get_target_alternative_genes`, `get_target_associated_diseases`, `get_target_known_drugs`, `get_target_literature_occurrences`, `get_target_expression`, `get_target_pathways_and_go_terms`, `get_target_homologues`, `get_target_subcellular_locations`, `get_target_genetic_constraint`, `get_target_mouse_phenotypes`, `get_target_hallmarks`, `get_target_depmap_essentiality`, `get_target_interactions`, `get_target_safety_information`, `get_target_tractability`, `get_target_chemical_probes`, `get_target_tep`, `get_target_prioritization`.
@@ -221,10 +242,12 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
 - **Drug profiling (10 tools)** — `get_drug_info`, `get_drug_cross_references`, `get_drug_linked_diseases`, `get_drug_linked_targets`, `get_drug_adverse_events`, `get_drug_pharmacovigilance`, `get_drug_warnings`, `get_drug_pharmacogenomics`, `get_drug_literature_occurrences`, `get_drug_similar_entities`.
 - **Evidence synthesis (2 tools)** — `get_target_disease_evidence`, `get_target_disease_biomarkers`.
 - **Search & discovery (4 tools)** — `search_entities`, `search_suggestions`, `get_similar_targets`, `search_facets`.
+- **Metadata & ontology utilities (5 tools)** — `get_api_metadata`, `get_association_datasources`, `get_gene_ontology_terms`, `get_interaction_resources`, `map_ids`.
+- **Workflow tools (1 tool)** — `get_drug_repurposing_candidates`.
 - **Batch lookups (3 tools)** — `get_targets_batch`, `get_diseases_batch`, `get_drugs_batch`.
 - **Variant interpretation (6 tools)** — `get_variant_info`, `get_variant_credible_sets`, `get_variant_pharmacogenomics`, `get_variant_evidences`, `get_variant_intervals`, `get_variant_protein_coordinates`.
 - **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
-- **Advanced GraphQL (2 tools)** — `graphql_schema` (SDL), `graphql_query` (structured result envelope: `status`, `result`, `message`).
+- **Advanced GraphQL (3 tools)** — `graphql_schema`, `graphql_query`, `graphql_batch_query`.
 
 Each grouping matches the data domains described in the Open Targets docs (targets, diseases, drugs, evidence, variants, and studies). For high-volume workloads, respect the platform's throttling guidance from the Open Targets API FAQ and cache downstream where possible.
 
@@ -236,4 +259,7 @@ uv run ruff check src tests
 
 # Run tests
 uv run pytest tests/ -v
+
+# Inspect registered tools from CLI
+uv run opentargets-mcp --list-tools
 ```

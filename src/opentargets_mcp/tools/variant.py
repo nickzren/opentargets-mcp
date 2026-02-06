@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to 'Variant' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
-from ..utils import select_fields
+from ..utils import filter_none_values, select_fields, validate_required_int
 
 class VariantApi:
     """
@@ -285,7 +285,8 @@ class VariantApi:
         variant_id: str,
         datasource_ids: Optional[List[str]] = None,
         size: int = 10,
-        cursor: Optional[str] = None
+        cursor: Optional[str] = None,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Retrieve evidence strings linking a variant to targets or diseases.
 
@@ -303,6 +304,7 @@ class VariantApi:
         - `datasource_ids` (`Optional[List[str]]`): Limit evidence to specific datasources.
         - `size` (`int`): Number of evidence rows per page (default 10).
         - `cursor` (`Optional[str]`): Pagination cursor from a previous request.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"variant": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "target": {...}, "disease": {...}, ...}], ...}}}`.
@@ -366,14 +368,15 @@ class VariantApi:
             }
         }
         """
+        validated_size = validate_required_int(size, "size")
         variables = {
             "variantId": variant_id,
             "datasourceIds": datasource_ids,
-            "size": size,
-            "cursor": cursor
+            "size": validated_size,
+            "cursor": cursor,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
+        result = await client._query(graphql_query, filter_none_values(variables))
+        return select_fields(result, fields)
 
     async def get_variant_intervals(
         self,

@@ -2,6 +2,8 @@
 import json
 from typing import Any, Dict, Iterable, Optional
 
+from .exceptions import ValidationError
+
 
 def filter_none_values(variables: Dict[str, Any]) -> Dict[str, Any]:
     """Remove None values from a dictionary.
@@ -72,3 +74,19 @@ def select_fields(payload: Any, fields: Optional[Iterable[str]] = None) -> Any:
         return value
 
     return project(payload, tree)
+
+
+def validate_required_int(
+    value: Any,
+    field_name: str,
+    *,
+    minimum: int = 1,
+) -> int:
+    """Validate that value is an int and greater than or equal to minimum."""
+    if value is None:
+        raise ValidationError(f"{field_name} is required and cannot be None.")
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValidationError(
+            f"{field_name} must be an integer >= {minimum}."
+        )
+    return value

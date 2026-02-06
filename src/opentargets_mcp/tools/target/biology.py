@@ -2,8 +2,9 @@
 """
 Defines API methods and MCP tools related to a target's biology.
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
+from ...utils import select_fields
 
 class TargetBiologyApi:
     """
@@ -11,7 +12,10 @@ class TargetBiologyApi:
     """
 
     async def get_target_expression(
-        self, client: OpenTargetsClient, ensembl_id: str
+        self,
+        client: OpenTargetsClient,
+        ensembl_id: str,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Return RNA and protein expression profiles for a target across tissues.
 
@@ -27,6 +31,7 @@ class TargetBiologyApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "expressions": [{"tissue": {...}, "rna": {...}, "protein": {...}}, ...]}}`.
@@ -54,7 +59,8 @@ class TargetBiologyApi:
             }
         }
         """
-        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+        result = await client._query(graphql_query, {"ensemblId": ensembl_id})
+        return select_fields(result, fields)
 
     async def get_target_pathways_and_go_terms(
         self,
@@ -443,6 +449,7 @@ class TargetBiologyApi:
         score_threshold: Optional[float] = None,
         page_index: int = 0,
         page_size: int = 10,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Retrieve protein interaction partners for a target from curated databases.
 
@@ -461,6 +468,7 @@ class TargetBiologyApi:
         - `score_threshold` (`Optional[float]`): Minimum confidence score (0–1).
         - `page_index` (`int`): Page index for pagination.
         - `page_size` (`int`): Number of interaction rows per page (default 10).
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "interactions": {"count": int, "rows": [{"intA": str, "targetB": {...}, "score": float, "sourceDatabase": str, ...}], "pageInfo": {...}}}}`.
@@ -522,4 +530,5 @@ class TargetBiologyApi:
             variables["sourceDatabase"] = source_database
         if score_threshold is not None:
             variables["scoreThreshold"] = score_threshold
-        return await client._query(graphql_query, variables)
+        result = await client._query(graphql_query, variables)
+        return select_fields(result, fields)

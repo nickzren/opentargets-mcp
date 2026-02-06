@@ -6,8 +6,9 @@ across multiple entity types in Open Targets.
 from typing import Any, Dict, List, Optional
 import asyncio
 import logging
+from ..exceptions import ValidationError
 from ..queries import OpenTargetsClient
-from ..utils import filter_none_values
+from ..utils import filter_none_values, validate_required_int
 from .meta import MetaApi
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,29 @@ class SearchApi:
         }
         return await client._query(graphql_query, variables)
 
+    @staticmethod
+    def _attach_search_triples(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Attach a compact `{id, entity, name}` list for easy downstream use."""
+        search = payload.get("search")
+        if not isinstance(search, dict):
+            return payload
+
+        hits = search.get("hits") or []
+        triples = []
+        for hit in hits:
+            if not isinstance(hit, dict):
+                continue
+            triples.append(
+                {
+                    "id": hit.get("id"),
+                    "entity": hit.get("entity"),
+                    "name": hit.get("name"),
+                }
+            )
+
+        search["triples"] = triples
+        return payload
+
     async def search_entities(
         self,
         client: OpenTargetsClient,
@@ -108,7 +132,7 @@ class SearchApi:
         - `page_size` (`int`): Number of hits per page (1–20 recommended; hard limit 100).
 
         **Returns**
-        - `Dict[str, Any]`: Response structured as `{"search": {"total": int, "hits": [{"id": str, "entity": str, "name": str, "score": float, "object": {...}}, ...]}}`.
+        - `Dict[str, Any]`: Response structured as `{"search": {"total": int, "hits": [...], "triples": [{"id": str, "entity": str, "name": str}, ...]}}`.
 
         **Errors**
         - Bubbles up GraphQL or network exceptions from `OpenTargetsClient`.
@@ -150,11 +174,12 @@ class SearchApi:
                 best_mapped_hit.get("name"),
                 best_mapped_hit.get("id"),
             )
-            return await self._search_direct(
+            resolved_results = await self._search_direct(
                 client, best_mapped_hit["id"], entity_names, page_index, page_size
             )
+            return self._attach_search_triples(resolved_results)
 
-        return direct_results
+        return self._attach_search_triples(direct_results)
 
     async def search_suggestions(
         self,
@@ -276,6 +301,12 @@ class SearchApi:
         logger.info([hit["object"]["approvedSymbol"] for hit in similar["target"]["similarEntities"]])
         ```
         """
+        validated_size = validate_required_int(size, "size")
+        if threshold is not None and (
+            not isinstance(threshold, (int, float)) or not 0 <= threshold <= 1
+        ):
+            raise ValidationError("threshold must be between 0 and 1 when provided.")
+
         graphql_query_target = """
         query SimilarTargets($entityId: String!, $threshold: Float, $size: Int!) {
             target(ensemblId: $entityId) {
@@ -293,7 +324,7 @@ class SearchApi:
         """
         return await client._query(
             graphql_query_target,
-            {"entityId": entity_id, "threshold": threshold, "size": size},
+            {"entityId": entity_id, "threshold": threshold, "size": validated_size},
         )
 
     async def search_facets(

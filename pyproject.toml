@@ -1,6 +1,6 @@
 [project]
 name = "opentargets-mcp"
-version = "0.4.0"
+version = "0.5.0"
 description = "MCP server for Open Targets Platform biomedical data access"
 authors = [{name = "Nick Ren"}]
 license = {text = "MIT"}
@@ -11,16 +11,19 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "fastmcp>=2.0.0",
     "aiohttp",
     "graphql-core>=3.2",
     "python-dotenv",
+    "pydantic-settings>=2.0",
 ]
 
 [project.scripts]

@@ -13,6 +13,7 @@ from .search import SearchApi
 from .study import StudyApi
 from .target import TargetApi
 from .variant import VariantApi
+from .workflows import WorkflowApi
 
 __all__ = [
     "DiseaseApi",
@@ -24,6 +25,7 @@ __all__ = [
     "StudyApi",
     "TargetApi",
     "VariantApi",
+    "WorkflowApi",
 ]
 
 

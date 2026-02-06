@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to a drug's associations with other en
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import select_fields
+from ...utils import filter_none_values, select_fields, validate_required_int
 
 class DrugAssociationsApi:
     """
@@ -281,12 +281,12 @@ class DrugAssociationsApi:
             }
         }
         """
+        validated_size = validate_required_int(size, "size")
         variables = {
             "chemblId": chembl_id,
             "threshold": threshold,
-            "size": size,
+            "size": validated_size,
             "entityNames": entity_names or ["drug"],
             "additionalIds": additional_entity_ids,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
+        return await client._query(graphql_query, filter_none_values(variables))

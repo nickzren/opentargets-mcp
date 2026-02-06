@@ -118,7 +118,8 @@ class StudyApi:
         enable_indirect: bool = False,
         study_id: Optional[str] = None,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """List studies linked to one or more diseases.
 
@@ -138,6 +139,7 @@ class StudyApi:
         - `study_id` (`Optional[str]`): Restrict to a specific study if provided.
         - `page_index` (`int`): Zero-based page index (default 0).
         - `page_size` (`int`): Number of study rows per page (default 10).
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"studies": {"count": int, "rows": [{"id": str, "traitFromSource": str, "nSamples": int, ...}, ...]}}`.
@@ -199,14 +201,16 @@ class StudyApi:
         }
         if study_id is not None:
             variables["studyId"] = study_id
-        return await client._query(graphql_query, variables)
+        result = await client._query(graphql_query, variables)
+        return select_fields(result, fields)
 
     async def get_study_credible_sets(
         self,
         client: OpenTargetsClient,
         study_id: str,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Retrieve fine-mapped credible sets for a study.
 
@@ -224,6 +228,7 @@ class StudyApi:
         - `study_id` (`str`): Study identifier.
         - `page_index` (`int`): Zero-based page (default 0).
         - `page_size` (`int`): Number of credible set rows per page (default 10).
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"study": {"id": str, "credibleSets": {"count": int, "rows": [{"studyLocusId": str, "credibleSetIndex": int, "variant": {...}, "locus": {...}}, ...]}}}`.
@@ -295,7 +300,11 @@ class StudyApi:
             }
         }
         """
-        return await client._query(graphql_query, {"studyId": study_id, "pageIndex": page_index, "pageSize": page_size})
+        result = await client._query(
+            graphql_query,
+            {"studyId": study_id, "pageIndex": page_index, "pageSize": page_size},
+        )
+        return select_fields(result, fields)
 
     async def get_credible_set_by_id(self, client: OpenTargetsClient, study_locus_id: str) -> Dict[str, Any]:
         """Fetch detailed information for a specific study locus credible set.
@@ -496,7 +505,8 @@ class StudyApi:
         study_types: Optional[List[str]] = None,
         regions: Optional[List[str]] = None,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
+        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Query credible sets with flexible filtering options.
 
@@ -518,6 +528,7 @@ class StudyApi:
         - `regions` (`Optional[List[str]]`): Filter by genomic regions (e.g., `["1:154000000-155000000"]`).
         - `page_index` (`int`): Zero-based page (default 0).
         - `page_size` (`int`): Number of rows per page (default 10).
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"credibleSets": {"count": int, "rows": [{"studyLocusId": str, "studyId": str, "variant": {...}, ...}]}}`.
@@ -613,4 +624,5 @@ class StudyApi:
         ]:
             if val is not None:
                 variables[key] = val
-        return await client._query(graphql_query, variables)
+        result = await client._query(graphql_query, variables)
+        return select_fields(result, fields)

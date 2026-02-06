@@ -3,8 +3,8 @@
 Defines API methods and MCP tools related to 'Disease' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
-from ..queries import OpenTargetsClient # Relative import
-from ..utils import select_fields
+from ..queries import OpenTargetsClient
+from ..utils import filter_none_values, select_fields, validate_required_int
 
 class DiseaseApi:
     """
@@ -214,14 +214,14 @@ class DiseaseApi:
             }
         }
         """
+        validated_size = validate_required_int(size, "size")
         variables = {
             "efoId": efo_id,
-            "size": size,
+            "size": validated_size,
             "cursor": cursor,
             "freeTextQuery": free_text_query,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
+        return await client._query(graphql_query, filter_none_values(variables))
 
     async def get_disease_ontology(
         self,
@@ -431,15 +431,15 @@ class DiseaseApi:
             }
         }
         """
+        validated_size = validate_required_int(size, "size")
         variables = {
             "efoId": efo_id,
             "threshold": threshold,
-            "size": size,
+            "size": validated_size,
             "entityNames": entity_names or ["disease"],
             "additionalIds": additional_entity_ids,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
-        return await client._query(graphql_query, variables)
+        return await client._query(graphql_query, filter_none_values(variables))
 
     async def get_disease_phenotypes(
         self,
