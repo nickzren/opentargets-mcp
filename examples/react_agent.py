@@ -44,88 +44,117 @@ for api in _API_INSTANCES:
         if inspect.iscoroutinefunction(method):
             TOOL_DISPATCH[attr] = method
 
+
 # Terminal color codes optimized for white/light backgrounds
 class Colors:
-    HEADER = '\033[35m'      # Magenta
-    BLUE = '\033[34m'        # Blue
-    GREEN = '\033[32m'       # Dark Green
-    RED = '\033[31m'         # Red
-    BOLD = '\033[1m'
-    DIM = '\033[2m'          # Dim text
-    END = '\033[0m'
-    BLACK = '\033[30m'       # Black for emphasis
+    HEADER = "\033[35m"  # Magenta
+    BLUE = "\033[34m"  # Blue
+    GREEN = "\033[32m"  # Dark Green
+    RED = "\033[31m"  # Red
+    BOLD = "\033[1m"
+    DIM = "\033[2m"  # Dim text
+    END = "\033[0m"
+    BLACK = "\033[30m"  # Black for emphasis
+
 
 def print_header(text: str):
     """Print a simple header."""
     print(f"\n{Colors.BLACK}{Colors.BOLD}{text}{Colors.END}")
     print(f"{Colors.DIM}{'─' * len(text)}{Colors.END}")
 
+
 def print_thought(thought: str):
     """Extract and print the thought section."""
     if "Thought:" in thought:
         thought_text = thought.split("Thought:", 1)[1].split("Action:", 1)[0].strip()
         # Remove excessive whitespace and wrap
-        thought_text = ' '.join(thought_text.split())
-        wrapped_text = textwrap.fill(thought_text, width=80, initial_indent="", subsequent_indent="")
+        thought_text = " ".join(thought_text.split())
+        wrapped_text = textwrap.fill(
+            thought_text, width=80, initial_indent="", subsequent_indent=""
+        )
         print(f"\n{Colors.BLUE}💭 {wrapped_text}{Colors.END}")
+
 
 def print_action(action: dict):
     """Print the action in a compact way."""
-    tool_name = action.get('tool_name')
-    if tool_name == 'finish':
+    tool_name = action.get("tool_name")
+    if tool_name == "finish":
         print(f"\n{Colors.GREEN}🎯 Preparing final answer...{Colors.END}")
     else:
-        args = action.get('arguments', {})
-        args_str = ", ".join([f"{k}={repr(v)}" for k, v in args.items() if k not in ['page_size', 'page_index']])
+        args = action.get("arguments", {})
+        args_str = ", ".join(
+            [
+                f"{k}={repr(v)}"
+                for k, v in args.items()
+                if k not in ["page_size", "page_index"]
+            ]
+        )
         if len(args_str) > 60:
             args_str = args_str[:60] + "..."
         print(f"\n{Colors.GREEN}🎯 Calling {tool_name}({args_str}){Colors.END}")
+
 
 def print_observation(observation: any):
     """Print key information from observation."""
     if isinstance(observation, dict) and observation:
         # Handle search results
-        if 'search' in observation and 'hits' in observation['search']:
-            hits = observation['search']['hits']
-            total = observation['search'].get('total', len(hits))
+        if "search" in observation and "hits" in observation["search"]:
+            hits = observation["search"]["hits"]
+            total = observation["search"].get("total", len(hits))
             print(f"{Colors.DIM}   → Found {total} results{Colors.END}")
             if hits:
                 first_hit = hits[0]
-                name = first_hit.get('name', 'Unknown')
-                entity_type = first_hit.get('entity', 'unknown')
-                obj_id = first_hit.get('id', 'N/A')
-                print(f"{Colors.BLACK}   → {name} ({entity_type}: {obj_id}){Colors.END}")
-        
+                name = first_hit.get("name", "Unknown")
+                entity_type = first_hit.get("entity", "unknown")
+                obj_id = first_hit.get("id", "N/A")
+                print(
+                    f"{Colors.BLACK}   → {name} ({entity_type}: {obj_id}){Colors.END}"
+                )
+
         # Handle drug info
-        elif 'drug' in observation and observation['drug']:
-            drug = observation['drug']
-            if 'name' in drug:
+        elif "drug" in observation and observation["drug"]:
+            drug = observation["drug"]
+            if "name" in drug:
                 print(f"{Colors.BLACK}   → Drug: {drug['name']}{Colors.END}")
-            if 'mechanismsOfAction' in drug and drug['mechanismsOfAction'].get('rows'):
-                moa = drug['mechanismsOfAction']['rows'][0]
-                print(f"{Colors.BLACK}   → Mechanism: {moa.get('mechanismOfAction', 'N/A')}{Colors.END}")
-                if 'targets' in moa and moa['targets']:
-                    target = moa['targets'][0]
-                    print(f"{Colors.BLACK}   → Target: {target.get('approvedSymbol', 'N/A')}{Colors.END}")
-        
+            if "mechanismsOfAction" in drug and drug["mechanismsOfAction"].get("rows"):
+                moa = drug["mechanismsOfAction"]["rows"][0]
+                print(
+                    f"{Colors.BLACK}   → Mechanism: {moa.get('mechanismOfAction', 'N/A')}{Colors.END}"
+                )
+                if "targets" in moa and moa["targets"]:
+                    target = moa["targets"][0]
+                    print(
+                        f"{Colors.BLACK}   → Target: {target.get('approvedSymbol', 'N/A')}{Colors.END}"
+                    )
+
         # Handle target info
-        elif 'target' in observation and observation['target']:
-            target = observation['target']
-            if 'approvedSymbol' in target:
-                print(f"{Colors.BLACK}   → Target: {target['approvedSymbol']} ({target.get('id', 'N/A')}){Colors.END}")
-            if 'associatedDiseases' in target and 'count' in target['associatedDiseases']:
-                print(f"{Colors.DIM}   → Associated diseases: {target['associatedDiseases']['count']}{Colors.END}")
-        
+        elif "target" in observation and observation["target"]:
+            target = observation["target"]
+            if "approvedSymbol" in target:
+                print(
+                    f"{Colors.BLACK}   → Target: {target['approvedSymbol']} ({target.get('id', 'N/A')}){Colors.END}"
+                )
+            if (
+                "associatedDiseases" in target
+                and "count" in target["associatedDiseases"]
+            ):
+                print(
+                    f"{Colors.DIM}   → Associated diseases: {target['associatedDiseases']['count']}{Colors.END}"
+                )
+
         # Handle disease info
-        elif 'disease' in observation and observation['disease']:
-            disease = observation['disease']
-            if 'name' in disease:
-                print(f"{Colors.BLACK}   → Disease: {disease['name']} ({disease.get('id', 'N/A')}){Colors.END}")
-        
+        elif "disease" in observation and observation["disease"]:
+            disease = observation["disease"]
+            if "name" in disease:
+                print(
+                    f"{Colors.BLACK}   → Disease: {disease['name']} ({disease.get('id', 'N/A')}){Colors.END}"
+                )
+
         # Generic fallback
         else:
             keys = list(observation.keys())[:3]
             print(f"{Colors.DIM}   → Response with keys: {', '.join(keys)}{Colors.END}")
+
 
 def print_error(error_msg: str):
     """Print error messages only if they're user-relevant."""
@@ -134,11 +163,15 @@ def print_error(error_msg: str):
         return
     print(f"{Colors.RED}❌ {error_msg}{Colors.END}")
 
+
 def print_final_answer(answer: str):
     """Print the final answer in a clean format."""
     print(f"\n{Colors.GREEN}{Colors.BOLD}✅ Answer:{Colors.END}")
-    wrapped = textwrap.fill(answer, width=80, initial_indent="   ", subsequent_indent="   ")
+    wrapped = textwrap.fill(
+        answer, width=80, initial_indent="   ", subsequent_indent="   "
+    )
     print(f"{Colors.BLACK}{wrapped}{Colors.END}")
+
 
 async def main():
     load_dotenv()
@@ -153,11 +186,11 @@ async def main():
 
     # Get tools and prepare for JSON serialization
     tools = []
-    for tool in await mcp._tool_manager.list_tools():
-        tool_dict = tool.model_dump(exclude={'fn', 'serializer'})
+    for tool in (await mcp.get_tools()).values():
+        tool_dict = tool.model_dump(exclude={"fn", "serializer"})
         # Convert sets to lists for JSON serialization
-        if 'tags' in tool_dict and isinstance(tool_dict['tags'], set):
-            tool_dict['tags'] = list(tool_dict['tags'])
+        if "tags" in tool_dict and isinstance(tool_dict["tags"], set):
+            tool_dict["tags"] = list(tool_dict["tags"])
         tools.append(tool_dict)
 
     tools_json_str = json.dumps(tools, indent=2)
@@ -187,33 +220,35 @@ After your action, the system will provide an `Observation:` with the result of 
     try:
         while True:
             question = input(f"\n{Colors.BOLD}Question:{Colors.END} ")
-            if question.lower() == 'exit':
+            if question.lower() == "exit":
                 print(f"{Colors.DIM}Goodbye!{Colors.END}")
                 break
 
             print(f"\n{Colors.DIM}Processing: {question}{Colors.END}")
-            
-            history = [{"role": "system", "content": system_prompt}, {"role": "user", "content": question}]
-            
+
+            history = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question},
+            ]
+
             step_count = 0
             for i in range(10):  # Limit to 10 steps
                 # Get LLM response
                 response = openai.chat.completions.create(
-                    model=OPENAI_MODEL,
-                    messages=history
+                    model=OPENAI_MODEL, messages=history
                 )
                 response_text = response.choices[0].message.content
-                
+
                 # Skip empty or error responses
                 if not response_text or "Thought:" not in response_text:
                     continue
-                
+
                 step_count += 1
                 print(f"\n{Colors.DIM}Step {step_count}:{Colors.END}")
-                
+
                 # Print thought
                 print_thought(response_text)
-                
+
                 history.append({"role": "assistant", "content": response_text})
 
                 try:
@@ -221,18 +256,27 @@ After your action, the system will provide an `Observation:` with the result of 
                     action_json_str = ""
                     if "Action:" in response_text:
                         action_part = response_text.split("Action:", 1)[1].strip()
-                        json_start = action_part.find('{')
-                        json_end = action_part.rfind('}') + 1
-                        if json_start != -1 and json_end != -1 and json_end > json_start:
+                        json_start = action_part.find("{")
+                        json_end = action_part.rfind("}") + 1
+                        if (
+                            json_start != -1
+                            and json_end != -1
+                            and json_end > json_start
+                        ):
                             action_json_str = action_part[json_start:json_end]
-                        
+
                     if not action_json_str:
-                        history.append({"role": "user", "content": "Observation: Error parsing action. Please ensure the Action block contains valid JSON."})
+                        history.append(
+                            {
+                                "role": "user",
+                                "content": "Observation: Error parsing action. Please ensure the Action block contains valid JSON.",
+                            }
+                        )
                         continue
 
                     action = json.loads(action_json_str)
                     print_action(action)
-                    
+
                     tool_name = action.get("tool_name")
 
                     if tool_name == "finish":
@@ -240,7 +284,12 @@ After your action, the system will provide an `Observation:` with the result of 
                         print_final_answer(final_answer)
                         break
                     if tool_name not in TOOL_DISPATCH:
-                        history.append({"role": "user", "content": f"Observation: Invalid tool name '{tool_name}'."})
+                        history.append(
+                            {
+                                "role": "user",
+                                "content": f"Observation: Invalid tool name '{tool_name}'.",
+                            }
+                        )
                         continue
 
                     arguments = action.get("arguments", {})
@@ -250,18 +299,31 @@ After your action, the system will provide an `Observation:` with the result of 
                     print_observation(observation)
 
                     observation_str = json.dumps(observation, indent=2)
-                    history.append({"role": "user", "content": f"Observation:\n{observation_str}"})
+                    history.append(
+                        {"role": "user", "content": f"Observation:\n{observation_str}"}
+                    )
 
                 except json.JSONDecodeError:
-                    history.append({"role": "user", "content": "Observation: Error parsing action JSON."})
+                    history.append(
+                        {
+                            "role": "user",
+                            "content": "Observation: Error parsing action JSON.",
+                        }
+                    )
                 except Exception as e:
-                    history.append({"role": "user", "content": f"Observation: An error occurred: {str(e)}"})
+                    history.append(
+                        {
+                            "role": "user",
+                            "content": f"Observation: An error occurred: {str(e)}",
+                        }
+                    )
                     break
 
     except KeyboardInterrupt:
         print(f"\n{Colors.DIM}Interrupted.{Colors.END}")
     finally:
         await api_client.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -191,14 +191,14 @@ class StudyApi:
             }
         }
         """
-        variables = {
+        variables: Dict[str, Any] = {
             "diseaseIds": disease_ids,
             "enableIndirect": enable_indirect,
-            "studyId": study_id,
             "pageIndex": page_index,
-            "pageSize": page_size
+            "pageSize": page_size,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
+        if study_id is not None:
+            variables["studyId"] = study_id
         return await client._query(graphql_query, variables)
 
     async def get_study_credible_sets(
@@ -600,15 +600,17 @@ class StudyApi:
             }
         }
         """
-        variables = {
-            "studyLocusIds": study_locus_ids,
-            "studyIds": study_ids,
-            "variantIds": variant_ids,
-            "studyTypes": study_types,
-            "regions": regions,
+        variables: Dict[str, Any] = {
             "pageIndex": page_index,
-            "pageSize": page_size
+            "pageSize": page_size,
         }
-        # Remove None values
-        variables = {k: v for k, v in variables.items() if v is not None}
+        for key, val in [
+            ("studyLocusIds", study_locus_ids),
+            ("studyIds", study_ids),
+            ("variantIds", variant_ids),
+            ("studyTypes", study_types),
+            ("regions", regions),
+        ]:
+            if val is not None:
+                variables[key] = val
         return await client._query(graphql_query, variables)

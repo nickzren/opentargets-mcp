@@ -1,18 +1,18 @@
 # tests/conftest.py
 import pytest
-import asyncio
 from opentargets_mcp.queries import OpenTargetsClient
 
 # Common test identifiers that can be used across different test files
-TEST_TARGET_ID_BRAF = "ENSG00000157764"      # BRAF
-TEST_TARGET_ID_EGFR = "ENSG00000146648"      # EGFR
-TEST_DISEASE_ID_ASTHMA = "EFO_0000270"       # Asthma
-TEST_DISEASE_ID_MELANOMA = "EFO_0000583"     # Melanoma
-TEST_DRUG_ID_VEMURAFENIB = "CHEMBL1201583"   # Vemurafenib
-TEST_DRUG_ID_OSIMERTINIB = "CHEMBL3308093"   # Osimertinib
+TEST_TARGET_ID_BRAF = "ENSG00000157764"  # BRAF
+TEST_TARGET_ID_EGFR = "ENSG00000146648"  # EGFR
+TEST_DISEASE_ID_ASTHMA = "EFO_0000270"  # Asthma
+TEST_DISEASE_ID_MELANOMA = "EFO_0000583"  # Melanoma
+TEST_DRUG_ID_VEMURAFENIB = "CHEMBL1201583"  # Vemurafenib
+TEST_DRUG_ID_OSIMERTINIB = "CHEMBL3308093"  # Osimertinib
 TEST_VARIANT_ID_1 = "1_154453788_C_T"
-TEST_STUDY_ID = "GCST90002357"       # Example GWAS study
-TEST_STUDY_LOCUS_ID = "GCST004131_1_109817651" # Example credible set
+TEST_STUDY_ID = "GCST90002357"  # Example GWAS study
+TEST_STUDY_LOCUS_ID = "GCST004131_1_109817651"  # Example credible set
+
 
 @pytest.fixture(scope="function")
 async def client():

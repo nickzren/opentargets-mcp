@@ -126,7 +126,7 @@ The MCP server acts as a bridge between client applications and the Open Targets
 
 ### Running the Server Standalone
 ```bash
-# Using the convenience script (automatically handles uv setup)
+# Using the convenience script (installs uv if missing, then syncs dependencies)
 ./run.sh
 
 # Or run directly with uv (stdio transport by default)
@@ -231,6 +231,9 @@ Each grouping matches the data domains described in the Open Targets docs (targe
 ## Development
 
 ```bash
+# Run lint checks (same as CI/release)
+uv run ruff check src tests
+
 # Run tests
 uv run pytest tests/ -v
 ```

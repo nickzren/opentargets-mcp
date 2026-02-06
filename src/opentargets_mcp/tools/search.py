@@ -23,11 +23,14 @@ class SearchApi:
     Contains methods for searching entities with intelligent resolution,
     autocomplete, and other search-related functionalities.
     """
+
     def __init__(self):
         self.meta_api = MetaApi()
         self.fuzzy_process = fuzzy_process
         if not self.fuzzy_process:
-            logger.warning("'thefuzz' library not found. Suggestions will not work. Please install it with 'pip install thefuzz python-Levenshtein'.")
+            logger.warning(
+                "'thefuzz' library not found. Suggestions will not work. Please install it with 'pip install thefuzz python-Levenshtein'."
+            )
 
     async def _search_direct(
         self,
@@ -35,7 +38,7 @@ class SearchApi:
         query_string: str,
         entity_names: Optional[List[str]],
         page_index: int,
-        page_size: int
+        page_size: int,
     ) -> Dict[str, Any]:
         """A private helper method for a direct, simple search."""
         graphql_query = """
@@ -67,9 +70,13 @@ class SearchApi:
         """
         variables = {
             "queryString": query_string,
-            "entityNames": entity_names if entity_names else ["target", "disease", "drug", "variant", "study"],
+            "entityNames": (
+                entity_names
+                if entity_names
+                else ["target", "disease", "drug", "variant", "study"]
+            ),
             "pageIndex": page_index,
-            "pageSize": page_size
+            "pageSize": page_size,
         }
         return await client._query(graphql_query, variables)
 
@@ -79,7 +86,7 @@ class SearchApi:
         query_string: str,
         entity_names: Optional[List[str]] = None,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
     ) -> Dict[str, Any]:
         """Search Open Targets entities and resolve synonyms to canonical IDs.
 
@@ -115,24 +122,37 @@ class SearchApi:
         ```
         """
         direct_search_task = asyncio.create_task(
-            self._search_direct(client, query_string, entity_names, page_index, page_size)
+            self._search_direct(
+                client, query_string, entity_names, page_index, page_size
+            )
         )
         map_ids_task = asyncio.create_task(
             self.meta_api.map_ids(client, [query_string], entity_names=entity_names)
         )
 
-        direct_results, mapped_results = await asyncio.gather(direct_search_task, map_ids_task)
+        direct_results, mapped_results = await asyncio.gather(
+            direct_search_task, map_ids_task
+        )
 
         best_mapped_hit = None
         mappings = mapped_results.get("mapIds", {}).get("mappings", [])
         if mappings and mappings[0].get("hits"):
-            best_mapped_hit = max(mappings[0]["hits"], key=lambda hit: hit.get('score', 0), default=None)
+            best_mapped_hit = max(
+                mappings[0]["hits"], key=lambda hit: hit.get("score", 0), default=None
+            )
 
-        direct_top_hit_id = direct_results.get("search", {}).get("hits", [{}])[0].get("id")
+        direct_hits = direct_results.get("search", {}).get("hits") or []
+        direct_top_hit_id = direct_hits[0].get("id") if direct_hits else None
         if best_mapped_hit and best_mapped_hit.get("id") != direct_top_hit_id:
-            logger.info("Resolving '%s' to best match: '%s' (%s). Fetching canonical results.",
-                       query_string, best_mapped_hit.get('name'), best_mapped_hit.get('id'))
-            return await self._search_direct(client, best_mapped_hit["id"], entity_names, page_index, page_size)
+            logger.info(
+                "Resolving '%s' to best match: '%s' (%s). Fetching canonical results.",
+                query_string,
+                best_mapped_hit.get("name"),
+                best_mapped_hit.get("id"),
+            )
+            return await self._search_direct(
+                client, best_mapped_hit["id"], entity_names, page_index, page_size
+            )
 
         return direct_results
 
@@ -141,7 +161,7 @@ class SearchApi:
         client: OpenTargetsClient,
         query_prefix: str,
         entity_names: Optional[List[str]] = None,
-        max_suggestions: int = 10
+        max_suggestions: int = 10,
     ) -> Dict[str, Any]:
         """Return autocomplete suggestions for partially typed queries.
 
@@ -176,18 +196,21 @@ class SearchApi:
         """
         if not self.fuzzy_process:
             return {"error": "'thefuzz' library is required for suggestions."}
-        
+
         if len(query_prefix) < 3:
-            return {"suggestions": [], "message": "Query prefix must be at least 3 characters long."}
+            return {
+                "suggestions": [],
+                "message": "Query prefix must be at least 3 characters long.",
+            }
 
         candidates_result = await self._search_direct(
             client,
             query_string=query_prefix,
             entity_names=entity_names,
             page_index=0,
-            page_size=50
+            page_size=50,
         )
-        
+
         if not candidates_result or not candidates_result.get("search", {}).get("hits"):
             return {"suggestions": []}
 
@@ -199,12 +222,9 @@ class SearchApi:
                 choices[name] = {"id": hit["id"], "entity": hit["entity"]}
             if symbol and symbol not in choices:
                 choices[symbol] = {"id": hit["id"], "entity": hit["entity"]}
-        
+
         extracted_suggestions = self.fuzzy_process.extractBests(
-            query_prefix,
-            choices.keys(),
-            score_cutoff=70,
-            limit=max_suggestions
+            query_prefix, choices.keys(), score_cutoff=70, limit=max_suggestions
         )
 
         suggestions = [
@@ -212,11 +232,11 @@ class SearchApi:
                 "label": suggestion[0],
                 "score": suggestion[1],
                 "id": choices[suggestion[0]]["id"],
-                "entity": choices[suggestion[0]]["entity"]
+                "entity": choices[suggestion[0]]["entity"],
             }
             for suggestion in extracted_suggestions
         ]
-        
+
         return {"suggestions": suggestions}
 
     async def get_similar_targets(
@@ -224,7 +244,7 @@ class SearchApi:
         client: OpenTargetsClient,
         entity_id: str,
         threshold: Optional[float] = 0.5,
-        size: int = 10
+        size: int = 10,
     ) -> Dict[str, Any]:
         """Identify targets with similar association profiles to the seed target.
 
@@ -271,7 +291,10 @@ class SearchApi:
             }
         }
         """
-        return await client._query(graphql_query_target, {"entityId": entity_id, "threshold": threshold, "size": size})
+        return await client._query(
+            graphql_query_target,
+            {"entityId": entity_id, "threshold": threshold, "size": size},
+        )
 
     async def search_facets(
         self,
@@ -280,7 +303,7 @@ class SearchApi:
         category_id: Optional[str] = None,
         entity_names: Optional[List[str]] = None,
         page_index: int = 0,
-        page_size: int = 20
+        page_size: int = 20,
     ) -> Dict[str, Any]:
         """Return facet counts to help filter search results.
 
@@ -330,11 +353,17 @@ class SearchApi:
             }
         }
         """
-        variables = filter_none_values({
-            "queryString": query_string,
-            "categoryId": category_id,
-            "entityNames": entity_names if entity_names else ["target", "disease", "drug", "variant", "study"],
-            "pageIndex": page_index,
-            "pageSize": page_size
-        })
+        variables = filter_none_values(
+            {
+                "queryString": query_string,
+                "categoryId": category_id,
+                "entityNames": (
+                    entity_names
+                    if entity_names
+                    else ["target", "disease", "drug", "variant", "study"]
+                ),
+                "pageIndex": page_index,
+                "pageSize": page_size,
+            }
+        )
         return await client._query(graphql_query, variables)

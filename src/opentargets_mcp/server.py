@@ -1,7 +1,9 @@
 """FastMCP-backed server for Open Targets MCP tools."""
+
 from __future__ import annotations
 
 import anyio
+import fastmcp
 import functools
 import inspect
 import logging
@@ -15,6 +17,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 import mcp.types as mcp_types
 
+from . import __version__
 from .queries import OpenTargetsClient
 from .tools.disease import DiseaseApi
 from .tools.drug import DrugApi
@@ -26,7 +29,6 @@ from .tools.study import StudyApi
 from .tools.target import TargetApi
 from .tools.variant import VariantApi
 from .resolver import resolve_params
-from mcp.server.lowlevel.server import NotificationOptions
 
 __all__ = [
     "mcp",
@@ -84,7 +86,7 @@ async def lifespan(server: FastMCP):
 # ---------------------------------------------------------------------------
 mcp = FastMCP(
     name="opentargets",
-    version="0.4.0",
+    version=__version__,
     instructions=(
         "Tool selection policy:\n"
         "1) If you have a name/symbol, call the relevant tool directly (IDs are auto-resolved).\n"
@@ -121,11 +123,9 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     signature = inspect.signature(method)
 
     @functools.wraps(method)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def wrapper(**kwargs: Any) -> Any:
         client = get_client()
-        bound = signature.bind_partial(client, *args, **kwargs)
-        params = {name: value for name, value in bound.arguments.items() if name != "client"}
-        resolved = await resolve_params(client, params)
+        resolved = await resolve_params(client, kwargs)
         return await method(client, **resolved)
 
     params = list(signature.parameters.values())[1:]
@@ -160,9 +160,6 @@ def register_all_api_methods() -> None:
             method = getattr(api, name)
             if not inspect.iscoroutinefunction(method):
                 continue
-            if name in getattr(mcp._tool_manager, "_tools", {}):
-                logger.debug("Tool already registered: %s", name)
-                continue
             wrapper = _make_tool_wrapper(method)
             description = _extract_tool_description(method)
             tool_decorator = mcp.tool(
@@ -180,6 +177,7 @@ register_all_api_methods()
 # ---------------------------------------------------------------------------
 # Deprecated module-level guidance
 # ---------------------------------------------------------------------------
+
 
 def __getattr__(name: str) -> Any:  # pragma: no cover - guidance only
     if name == "ALL_TOOLS":
@@ -203,14 +201,9 @@ async def discovery_endpoint(request: Request) -> JSONResponse:
     """Expose MCP discovery metadata for HTTP/SSE clients."""
 
     base_url = str(request.base_url).rstrip("/")
-    sse_path = mcp._deprecated_settings.sse_path.lstrip("/")
-    message_path = mcp._deprecated_settings.message_path.lstrip("/")
-    http_path = mcp._deprecated_settings.streamable_http_path.lstrip("/")
-
-    capabilities = mcp._mcp_server.get_capabilities(
-        NotificationOptions(),
-        experimental_capabilities={}
-    )
+    sse_path = fastmcp.settings.sse_path.lstrip("/")
+    message_path = fastmcp.settings.message_path.lstrip("/")
+    http_path = fastmcp.settings.streamable_http_path.lstrip("/")
 
     transports: dict[str, dict[str, str]] = {
         "sse": {
@@ -226,11 +219,13 @@ async def discovery_endpoint(request: Request) -> JSONResponse:
     discovery = {
         "protocolVersion": mcp_types.LATEST_PROTOCOL_VERSION,
         "server": {
-            "name": mcp._mcp_server.name,
-            "version": mcp._mcp_server.version,
-            "instructions": mcp._mcp_server.instructions,
+            "name": mcp.name,
+            "version": mcp.version,
+            "instructions": mcp.instructions,
         },
-        "capabilities": capabilities.model_dump(mode="json"),
+        "capabilities": mcp_types.ServerCapabilities(
+            tools=mcp_types.ToolsCapability(listChanged=True)
+        ).model_dump(mode="json"),
         "transports": transports,
     }
 
@@ -244,7 +239,7 @@ async def root_health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
-@mcp.custom_route(mcp._deprecated_settings.sse_path, methods=["POST"], include_in_schema=False)
+@mcp.custom_route(fastmcp.settings.sse_path, methods=["POST"], include_in_schema=False)
 async def sse_message_fallback(_: Request) -> Response:
     """Gracefully handle clients that POST to the SSE endpoint."""
 
@@ -292,10 +287,14 @@ def main() -> None:
     if args.transport in {"sse", "http"}:
         os.environ["FASTMCP_SERVER_HOST"] = args.host
         os.environ["FASTMCP_SERVER_PORT"] = str(args.port)
-        if hasattr(mcp, "settings"):
-            mcp.settings.host = args.host  # type: ignore[attr-defined]
-            mcp.settings.port = args.port  # type: ignore[attr-defined]
-        logger.info("Configured %s host=%s port=%s", args.transport.upper(), args.host, args.port)
+        fastmcp.settings.host = args.host
+        fastmcp.settings.port = args.port
+        logger.info(
+            "Configured %s host=%s port=%s",
+            args.transport.upper(),
+            args.host,
+            args.port,
+        )
 
     logger.info(
         "Starting Open Targets MCP server (transport=%s, host=%s, port=%s)",
@@ -312,6 +311,7 @@ def main() -> None:
 
     try:
         if args.transport == "http":
+
             async def run_http():
                 await mcp.run_http_async(host=args.host, port=args.port)
 

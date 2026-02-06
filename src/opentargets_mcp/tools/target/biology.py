@@ -9,7 +9,10 @@ class TargetBiologyApi:
     """
     Contains methods to query a target's biological attributes.
     """
-    async def get_target_expression(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+
+    async def get_target_expression(
+        self, client: OpenTargetsClient, ensembl_id: str
+    ) -> Dict[str, Any]:
         """Return RNA and protein expression profiles for a target across tissues.
 
         **When to use**
@@ -58,7 +61,7 @@ class TargetBiologyApi:
         client: OpenTargetsClient,
         ensembl_id: str,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
     ) -> Dict[str, Any]:
         """List pathway memberships and Gene Ontology annotations for a target.
 
@@ -115,7 +118,9 @@ class TargetBiologyApi:
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
-    async def get_target_homologues(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+    async def get_target_homologues(
+        self, client: OpenTargetsClient, ensembl_id: str
+    ) -> Dict[str, Any]:
         """Retrieve cross-species homologues for a target gene.
 
         **When to use**
@@ -164,7 +169,9 @@ class TargetBiologyApi:
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
-    async def get_target_subcellular_locations(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+    async def get_target_subcellular_locations(
+        self, client: OpenTargetsClient, ensembl_id: str
+    ) -> Dict[str, Any]:
         """Return subcellular localisation annotations for a target.
 
         **When to use**
@@ -208,7 +215,9 @@ class TargetBiologyApi:
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
-    async def get_target_genetic_constraint(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+    async def get_target_genetic_constraint(
+        self, client: OpenTargetsClient, ensembl_id: str
+    ) -> Dict[str, Any]:
         """Fetch genetic constraint metrics (gnomAD) for a target.
 
         **When to use**
@@ -264,7 +273,7 @@ class TargetBiologyApi:
         client: OpenTargetsClient,
         ensembl_id: str,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
     ) -> Dict[str, Any]:
         """Retrieve mouse knockout phenotypes associated with a target.
 
@@ -318,7 +327,9 @@ class TargetBiologyApi:
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
-    async def get_target_hallmarks(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+    async def get_target_hallmarks(
+        self, client: OpenTargetsClient, ensembl_id: str
+    ) -> Dict[str, Any]:
         """Return cancer hallmark annotations associated with a target.
 
         **When to use**
@@ -369,7 +380,9 @@ class TargetBiologyApi:
         """
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
-    async def get_target_depmap_essentiality(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
+    async def get_target_depmap_essentiality(
+        self, client: OpenTargetsClient, ensembl_id: str
+    ) -> Dict[str, Any]:
         """Fetch DepMap CRISPR essentiality scores across cell lines.
 
         **When to use**
@@ -429,7 +442,7 @@ class TargetBiologyApi:
         source_database: Optional[str] = None,
         score_threshold: Optional[float] = None,
         page_index: int = 0,
-        page_size: int = 10
+        page_size: int = 10,
     ) -> Dict[str, Any]:
         """Retrieve protein interaction partners for a target from curated databases.
 
@@ -500,12 +513,13 @@ class TargetBiologyApi:
             }
         }
         """
-        variables = {
+        variables: Dict[str, Any] = {
             "ensemblId": ensembl_id,
-            "sourceDatabase": source_database,
-            "scoreThreshold": score_threshold,
             "pageIndex": page_index,
-            "pageSize": page_size
+            "pageSize": page_size,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
+        if source_database is not None:
+            variables["sourceDatabase"] = source_database
+        if score_threshold is not None:
+            variables["scoreThreshold"] = score_threshold
         return await client._query(graphql_query, variables)

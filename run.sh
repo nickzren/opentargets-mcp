@@ -10,11 +10,9 @@ if ! command -v uv &> /dev/null; then
     python3 -m pip install --user uv
 fi
 
-# Sync dependencies if needed
-if [ ! -d ".venv" ]; then
-    echo "Setting up virtual environment and dependencies..."
-    uv sync
-fi
+# Sync dependencies on every run so lockfile updates are applied
+echo "Syncing virtual environment and dependencies..."
+uv sync
 
 # Run the server
 echo "Starting Open Targets MCP Server..."

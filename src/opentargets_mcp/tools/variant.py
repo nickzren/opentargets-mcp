@@ -185,13 +185,13 @@ class VariantApi:
             }
         }
         """
-        variables = {
+        variables: Dict[str, Any] = {
             "variantId": variant_id,
-            "studyTypes": study_types,
             "pageIndex": page_index,
-            "pageSize": page_size
+            "pageSize": page_size,
         }
-        variables = {k: v for k, v in variables.items() if v is not None}
+        if study_types is not None:
+            variables["studyTypes"] = study_types
         return await client._query(graphql_query, variables)
 
     async def get_variant_pharmacogenomics(
