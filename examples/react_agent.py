@@ -186,7 +186,9 @@ async def main():
 
     # Get tools and prepare for JSON serialization
     tools = []
-    for tool in (await mcp.get_tools()).values():
+    tool_registry = await mcp.list_tools()
+    iter_tools = tool_registry.values() if isinstance(tool_registry, dict) else tool_registry
+    for tool in iter_tools:
         tool_dict = tool.model_dump(exclude={"fn", "serializer"})
         # Convert sets to lists for JSON serialization
         if "tags" in tool_dict and isinstance(tool_dict["tags"], set):
