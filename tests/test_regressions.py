@@ -287,6 +287,56 @@ def test_server_main_rejects_port_above_tcp_max(monkeypatch):
     assert exc.value.code == 2
 
 
+def test_server_main_lists_tools_with_v3_shape(monkeypatch, capsys):
+    import opentargets_mcp.server as server_module
+
+    class _Tool:
+        def __init__(self, name: str, description: str | None):
+            self.name = name
+            self.description = description
+
+    async def fake_list_tools():
+        return [
+            _Tool("zeta_tool", "Zeta summary\nExtra details"),
+            _Tool("alpha_tool", None),
+        ]
+
+    monkeypatch.setattr(server_module.mcp, "list_tools", fake_list_tools)
+    monkeypatch.setattr("sys.argv", ["opentargets-mcp", "--list-tools"])
+
+    server_module.main()
+
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "alpha_tool: No description available",
+        "zeta_tool: Zeta summary",
+    ]
+
+
+def test_server_main_lists_tools_with_dict_shape(monkeypatch, capsys):
+    import opentargets_mcp.server as server_module
+
+    class _Tool:
+        def __init__(self, name: str, description: str | None):
+            self.name = name
+            self.description = description
+
+    async def fake_list_tools():
+        return {
+            "zeta_tool": _Tool("zeta_tool", "Zeta summary\nExtra details"),
+            "alpha_tool": _Tool("alpha_tool", None),
+        }
+
+    monkeypatch.setattr(server_module.mcp, "list_tools", fake_list_tools)
+    monkeypatch.setattr("sys.argv", ["opentargets-mcp", "--list-tools"])
+
+    server_module.main()
+
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "alpha_tool: No description available",
+        "zeta_tool: Zeta summary",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_tool_wrapper_rejects_bool_page_size(monkeypatch):
     import opentargets_mcp.server as server_module

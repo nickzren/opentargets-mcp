@@ -343,12 +343,17 @@ def main() -> None:
         return
 
     if args.list_tools:
-        async def collect_tools() -> dict[str, Any]:
-            return await mcp.get_tools()
+        async def collect_tools() -> list[Any] | dict[str, Any]:
+            return await mcp.list_tools()
 
         tools = anyio.run(collect_tools)
-        for name in sorted(tools):
-            description = (tools[name].description or "").strip().splitlines()
+        if isinstance(tools, dict):
+            entries = sorted(tools.items(), key=lambda item: item[0])
+        else:
+            entries = sorted(((tool.name, tool) for tool in tools), key=lambda item: item[0])
+
+        for name, tool in entries:
+            description = (tool.description or "").strip().splitlines()
             first_line = description[0] if description else "No description available"
             print(f"{name}: {first_line}")
         return
