@@ -61,7 +61,7 @@ class SearchApi:
                         __typename
                         ... on Target { id, approvedSymbol, approvedName, biotype }
                         ... on Disease { id, name, description, therapeuticAreas { id, name } }
-                        ... on Drug { id, name, drugType, maximumClinicalTrialPhase, isApproved }
+                        ... on Drug { id, name, drugType, maximumClinicalStage }
                         ... on Variant { id, chromosome, position, rsIds }
                         ... on Study { id, studyType, traitFromSource }
                     }

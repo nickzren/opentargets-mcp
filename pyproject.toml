@@ -24,6 +24,8 @@ dependencies = [
     "graphql-core>=3.2",
     "python-dotenv",
     "pydantic-settings>=2.0",
+    "thefuzz",
+    "python-Levenshtein",
 ]
 
 [project.scripts]
@@ -49,11 +51,9 @@ dev = [
     "mcp",
     "pytest",
     "pytest-asyncio",
-    "thefuzz",
     "black",
     "ruff",
 ]
 examples = [
     "openai",
-    "thefuzz",
 ]
