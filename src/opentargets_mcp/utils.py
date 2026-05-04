@@ -76,6 +76,95 @@ def select_fields(payload: Any, fields: Optional[Iterable[str]] = None) -> Any:
     return project(payload, tree)
 
 
+def clinical_stage_to_phase(stage: Any) -> int:
+    """Convert Open Targets clinical stage strings to the legacy numeric phase."""
+    if isinstance(stage, bool):
+        return 0
+    if isinstance(stage, int):
+        return stage
+    if not isinstance(stage, str):
+        return 0
+
+    normalized = stage.upper()
+    stage_map = {
+        "UNKNOWN": 0,
+        "PHASE_0": 0,
+        "PHASE_1": 1,
+        "PHASE_1_2": 1,
+        "PHASE_2": 2,
+        "PHASE_2_3": 2,
+        "PHASE_3": 3,
+        "PHASE_4": 4,
+        "APPROVAL": 4,
+    }
+    return stage_map.get(normalized, 0)
+
+
+def add_legacy_drug_fields(drug: Any) -> Any:
+    """Populate removed drug fields from the current Open Targets schema."""
+    if not isinstance(drug, dict):
+        return drug
+
+    stage = drug.get("maximumClinicalStage")
+    phase = clinical_stage_to_phase(stage)
+    drug.setdefault("maximumClinicalTrialPhase", phase)
+    drug.setdefault("isApproved", stage == "APPROVAL" or phase >= 4)
+
+    warnings = drug.get("drugWarnings") or []
+    if isinstance(warnings, list):
+        warning_text = " ".join(
+            " ".join(str(item.get(key, "")) for key in ("warningType", "toxicityClass"))
+            for item in warnings
+            if isinstance(item, dict)
+        ).lower()
+        drug.setdefault("hasBeenWithdrawn", "withdraw" in warning_text)
+        drug.setdefault(
+            "blackBoxWarning",
+            "black box" in warning_text or "blackbox" in warning_text,
+        )
+    else:
+        drug.setdefault("hasBeenWithdrawn", False)
+        drug.setdefault("blackBoxWarning", False)
+
+    return drug
+
+
+def normalize_clinical_candidate(row: Any) -> Any:
+    """Add legacy known-drug row fields to current clinical candidate rows."""
+    if not isinstance(row, dict):
+        return row
+
+    row.setdefault("phase", clinical_stage_to_phase(row.get("maxClinicalStage")))
+    reports = row.get("clinicalReports") or []
+    if isinstance(reports, list) and reports:
+        first_report = next((item for item in reports if isinstance(item, dict)), {})
+        row.setdefault("status", first_report.get("trialOverallStatus"))
+        urls = [
+            {"name": item.get("id") or item.get("source"), "url": item.get("url")}
+            for item in reports
+            if isinstance(item, dict) and item.get("url")
+        ]
+        if urls:
+            row.setdefault("urls", urls)
+
+    add_legacy_drug_fields(row.get("drug"))
+
+    diseases = row.get("diseases")
+    if isinstance(diseases, list) and diseases:
+        disease = next(
+            (
+                item.get("disease")
+                for item in diseases
+                if isinstance(item, dict) and isinstance(item.get("disease"), dict)
+            ),
+            None,
+        )
+        if disease is not None:
+            row.setdefault("disease", disease)
+
+    return row
+
+
 def validate_required_int(
     value: Any,
     field_name: str,

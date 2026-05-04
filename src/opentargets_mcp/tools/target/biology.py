@@ -116,7 +116,7 @@ class TargetBiologyApi:
                     source
                     term {
                          id
-                         name
+                         name: label
                     }
                 }
             }
@@ -488,7 +488,7 @@ class TargetBiologyApi:
         graphql_query = """
         query TargetInteractions(
             $ensemblId: String!,
-            $sourceDatabase: String,
+            $sourceDatabase: InteractionSourceEnum,
             $scoreThreshold: Float,
             $pageIndex: Int!,
             $pageSize: Int!

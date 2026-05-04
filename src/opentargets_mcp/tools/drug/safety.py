@@ -4,6 +4,7 @@ Defines API methods and MCP tools related to drug safety and pharmacovigilance.
 """
 from typing import Any, Dict
 from ...queries import OpenTargetsClient
+from ...utils import add_legacy_drug_fields
 
 class DrugSafetyApi:
     """
@@ -99,9 +100,11 @@ class DrugSafetyApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                isApproved
-                hasBeenWithdrawn
-                blackBoxWarning
+                maximumClinicalStage
+                drugWarnings {
+                    warningType
+                    toxicityClass
+                }
                 adverseEvents(page: {index: 0, size: 20}) {
                      count
                      criticalValue
@@ -115,7 +118,9 @@ class DrugSafetyApi:
             }
         }
         """
-        return await client._query(graphql_query, {"chemblId": chembl_id})
+        result = await client._query(graphql_query, {"chemblId": chembl_id})
+        add_legacy_drug_fields(result.get("drug"))
+        return result
 
     async def get_drug_pharmacogenomics(
         self,
@@ -153,11 +158,11 @@ class DrugSafetyApi:
         ```
         """
         graphql_query = """
-        query DrugPharmacogenomics($chemblId: String!, $pageIndex: Int!, $pageSize: Int!) {
+        query DrugPharmacogenomics($chemblId: String!) {
             drug(chemblId: $chemblId) {
                 id
                 name
-                pharmacogenomics(page: {index: $pageIndex, size: $pageSize}) {
+                pharmacogenomics {
                     variantId
                     variantRsId
                     genotype
@@ -184,7 +189,13 @@ class DrugSafetyApi:
             }
         }
         """
-        return await client._query(graphql_query, {"chemblId": chembl_id, "pageIndex": page_index, "pageSize": page_size})
+        result = await client._query(graphql_query, {"chemblId": chembl_id})
+        drug = result.get("drug")
+        pgx = drug.get("pharmacogenomics") if isinstance(drug, dict) else None
+        if isinstance(pgx, list):
+            start = page_index * page_size
+            drug["pharmacogenomics"] = pgx[start : start + page_size]
+        return result
 
     async def get_drug_warnings(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:
         """Fetch detailed regulatory warnings, including withdrawals and boxed labels.
@@ -221,8 +232,7 @@ class DrugSafetyApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                hasBeenWithdrawn
-                blackBoxWarning
+                maximumClinicalStage
                 drugWarnings {
                     warningType
                     description
@@ -242,4 +252,6 @@ class DrugSafetyApi:
             }
         }
         """
-        return await client._query(graphql_query, {"chemblId": chembl_id})
+        result = await client._query(graphql_query, {"chemblId": chembl_id})
+        add_legacy_drug_fields(result.get("drug"))
+        return result

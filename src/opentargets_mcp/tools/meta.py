@@ -4,6 +4,7 @@ Defines API methods and MCP tools for metadata and utility functions in Open Tar
 """
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
+from ..utils import add_legacy_drug_fields
 
 class MetaApi:
     """
@@ -169,7 +170,7 @@ class MetaApi:
         query GeneOntologyTerms($goIds: [String!]!) {
             geneOntologyTerms(goIds: $goIds) {
                 id
-                name
+                name: label
             }
         }
         """
@@ -294,16 +295,22 @@ class MetaApi:
                 name
                 drugType
                 description
-                isApproved
-                hasBeenWithdrawn
-                maximumClinicalTrialPhase
-                yearOfFirstApproval
+                maximumClinicalStage
+                drugWarnings {
+                    warningType
+                    toxicityClass
+                }
                 synonyms
                 tradeNames
             }
         }
         """
-        return await client._query(graphql_query, {"chemblIds": chembl_ids})
+        result = await client._query(graphql_query, {"chemblIds": chembl_ids})
+        drugs = result.get("drugs")
+        if isinstance(drugs, list):
+            for drug in drugs:
+                add_legacy_drug_fields(drug)
+        return result
 
     async def map_ids(
         self,

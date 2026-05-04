@@ -4,7 +4,12 @@ Defines API methods and MCP tools related to 'Disease' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
-from ..utils import filter_none_values, select_fields, validate_required_int
+from ..utils import (
+    filter_none_values,
+    normalize_clinical_candidate,
+    select_fields,
+    validate_required_int,
+)
 
 class DiseaseApi:
     """
@@ -177,36 +182,27 @@ class DiseaseApi:
         ```
         """
         graphql_query = """
-        query DiseaseKnownDrugs($efoId: String!, $size: Int!, $cursor: String, $freeTextQuery: String) {
+        query DiseaseKnownDrugs($efoId: String!) {
             disease(efoId: $efoId) {
                 id
                 name
-                knownDrugs(size: $size, cursor: $cursor, freeTextQuery: $freeTextQuery) {
+                drugAndClinicalCandidates {
                     count
-                    cursor
                     rows {
-                        drugId
-                        targetId
+                        id
+                        maxClinicalStage
                         drug {
                             id
                             name
                             drugType
-                            maximumClinicalTrialPhase
-                            isApproved
+                            maximumClinicalStage
                         }
-                        mechanismOfAction
-                        target {
+                        clinicalReports {
                             id
-                            approvedSymbol
-                        }
-                        disease {
-                            id
-                            name
-                        }
-                        phase
-                        status
-                        urls {
-                            name
+                            source
+                            clinicalStage
+                            trialPhase
+                            trialOverallStatus
                             url
                         }
                     }
@@ -217,11 +213,20 @@ class DiseaseApi:
         validated_size = validate_required_int(size, "size")
         variables = {
             "efoId": efo_id,
-            "size": validated_size,
-            "cursor": cursor,
-            "freeTextQuery": free_text_query,
         }
-        return await client._query(graphql_query, filter_none_values(variables))
+        result = await client._query(graphql_query, filter_none_values(variables))
+        disease = result.get("disease")
+        if isinstance(disease, dict):
+            candidates = disease.pop("drugAndClinicalCandidates", None)
+            if isinstance(candidates, dict):
+                rows = candidates.get("rows")
+                if isinstance(rows, list):
+                    candidates["rows"] = [
+                        normalize_clinical_candidate(row) for row in rows[:validated_size]
+                    ]
+                    candidates["count"] = len(candidates["rows"])
+                disease["knownDrugs"] = candidates
+        return result
 
     async def get_disease_ontology(
         self,

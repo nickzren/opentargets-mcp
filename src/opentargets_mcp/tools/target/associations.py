@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to a target's associations.
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import select_fields
+from ...utils import normalize_clinical_candidate, select_fields
 
 class TargetAssociationsApi:
     """
@@ -108,28 +108,31 @@ class TargetAssociationsApi:
         graphql_query = """
         query TargetKnownDrugs($ensemblId: String!) {
             target(ensemblId: $ensemblId) {
-                knownDrugs {
+                drugAndClinicalCandidates {
                     count
                     rows {
-                        drugId
-                        targetId
+                        id
+                        maxClinicalStage
                         drug {
                             id
                             name
                             drugType
-                            maximumClinicalTrialPhase
-                            isApproved
+                            maximumClinicalStage
                             description
                         }
-                        mechanismOfAction
-                        disease {
-                            id
-                            name
+                        diseases {
+                            diseaseFromSource
+                            disease {
+                                id
+                                name
+                            }
                         }
-                        phase
-                        status
-                        urls {
-                            name
+                        clinicalReports {
+                            id
+                            source
+                            clinicalStage
+                            trialPhase
+                            trialOverallStatus
                             url
                         }
                     }
@@ -138,6 +141,18 @@ class TargetAssociationsApi:
         }
         """
         result = await client._query(graphql_query, {"ensemblId": ensembl_id})
+        target = result.get("target")
+        if isinstance(target, dict):
+            candidates = target.pop("drugAndClinicalCandidates", None)
+            if isinstance(candidates, dict):
+                rows = candidates.get("rows")
+                if isinstance(rows, list):
+                    rows = [
+                        normalize_clinical_candidate(row) for row in rows[:page_size]
+                    ]
+                    candidates["rows"] = rows
+                    candidates["count"] = len(rows)
+                target["knownDrugs"] = candidates
         return select_fields(result, fields)
 
     async def get_target_literature_occurrences(

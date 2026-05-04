@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to a drug's identity and classificatio
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import select_fields
+from ...utils import add_legacy_drug_fields, select_fields
 
 class DrugIdentityApi:
     """
@@ -54,11 +54,11 @@ class DrugIdentityApi:
                 tradeNames
                 drugType
                 description
-                isApproved
-                hasBeenWithdrawn
-                blackBoxWarning
-                yearOfFirstApproval
-                maximumClinicalTrialPhase
+                maximumClinicalStage
+                drugWarnings {
+                    warningType
+                    toxicityClass
+                }
                 mechanismsOfAction {
                     rows {
                        mechanismOfAction
@@ -66,6 +66,8 @@ class DrugIdentityApi:
                        targets {
                            id
                            approvedSymbol
+                           approvedName
+                           biotype
                        }
                        actionType
                        references {
@@ -82,19 +84,15 @@ class DrugIdentityApi:
                             name
                             therapeuticAreas {id, name}
                         }
-                        maxPhaseForIndication
-                        references {
+                        maxClinicalStage
+                        clinicalReports {
+                            id
                             source
-                            ids
+                            clinicalStage
+                            trialPhase
+                            trialOverallStatus
+                            url
                         }
-                    }
-                    count
-                }
-                linkedTargets {
-                    rows {
-                        id
-                        approvedSymbol
-                        biotype
                     }
                     count
                 }
@@ -102,6 +100,20 @@ class DrugIdentityApi:
         }
         """
         result = await client._query(graphql_query, {"chemblId": chembl_id})
+        drug = result.get("drug")
+        if isinstance(drug, dict):
+            add_legacy_drug_fields(drug)
+            targets_by_id: Dict[str, Any] = {}
+            for moa in drug.get("mechanismsOfAction", {}).get("rows", []) or []:
+                if not isinstance(moa, dict):
+                    continue
+                for target in moa.get("targets", []) or []:
+                    if isinstance(target, dict) and target.get("id"):
+                        targets_by_id.setdefault(target["id"], target)
+            drug.setdefault(
+                "linkedTargets",
+                {"count": len(targets_by_id), "rows": list(targets_by_id.values())},
+            )
         return select_fields(result, fields)
 
     async def get_drug_cross_references(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:

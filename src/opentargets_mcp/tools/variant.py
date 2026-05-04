@@ -232,11 +232,11 @@ class VariantApi:
         ```
         """
         graphql_query = """
-        query VariantPharmacogenomics($variantId: String!, $pageIndex: Int!, $pageSize: Int!) {
+        query VariantPharmacogenomics($variantId: String!) {
             variant(variantId: $variantId) {
                 id
                 rsIds
-                pharmacogenomics(page: {index: $pageIndex, size: $pageSize}) {
+                pharmacogenomics {
                     variantId
                     variantRsId
                     variantFunctionalConsequenceId
@@ -277,7 +277,13 @@ class VariantApi:
             }
         }
         """
-        return await client._query(graphql_query, {"variantId": variant_id, "pageIndex": page_index, "pageSize": page_size})
+        result = await client._query(graphql_query, {"variantId": variant_id})
+        variant = result.get("variant")
+        pgx = variant.get("pharmacogenomics") if isinstance(variant, dict) else None
+        if isinstance(pgx, list):
+            start = page_index * page_size
+            variant["pharmacogenomics"] = pgx[start : start + page_size]
+        return result
 
     async def get_variant_evidences(
         self,
@@ -423,7 +429,7 @@ class VariantApi:
                 rsIds
                 chromosome
                 position
-                intervals(page: {index: $pageIndex, size: $pageSize}) {
+                intervals: enhancerToGenes(page: {index: $pageIndex, size: $pageSize}) {
                     count
                     rows {
                         chromosome

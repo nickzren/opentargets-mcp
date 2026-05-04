@@ -227,6 +227,7 @@ class WorkflowApi:
                             "maximumClinicalTrialPhase": drug.get(
                                 "maximumClinicalTrialPhase"
                             ),
+                            "maximumClinicalStage": drug.get("maximumClinicalStage"),
                         },
                         "bestAssociationScore": target["association_score"],
                         "bestPhase": phase,

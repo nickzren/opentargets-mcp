@@ -180,7 +180,7 @@ class EvidenceApi:
                             }
                             geneExpression {
                                 name
-                                id { id, name }
+                                id { id, name: label }
                             }
                         }
                         biomarkerList {

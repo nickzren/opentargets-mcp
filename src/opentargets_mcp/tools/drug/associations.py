@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to a drug's associations with other en
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import filter_none_values, select_fields, validate_required_int
+from ...utils import add_legacy_drug_fields, filter_none_values, select_fields, validate_required_int
 
 class DrugAssociationsApi:
     """
@@ -50,15 +50,27 @@ class DrugAssociationsApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                linkedDiseases {
+                indications {
                     count
                     rows {
                         id
-                        name
-                        description
-                        therapeuticAreas {
+                        maxClinicalStage
+                        disease {
                             id
                             name
+                            description
+                            therapeuticAreas {
+                                id
+                                name
+                            }
+                        }
+                        clinicalReports {
+                            id
+                            source
+                            clinicalStage
+                            trialPhase
+                            trialOverallStatus
+                            url
                         }
                     }
                 }
@@ -66,6 +78,20 @@ class DrugAssociationsApi:
         }
         """
         result = await client._query(graphql_query, {"chemblId": chembl_id})
+        drug = result.get("drug")
+        if isinstance(drug, dict):
+            indications = drug.pop("indications", None)
+            if isinstance(indications, dict):
+                rows = []
+                for row in indications.get("rows", []) or []:
+                    if not isinstance(row, dict):
+                        continue
+                    disease = row.get("disease")
+                    if isinstance(disease, dict):
+                        disease.setdefault("maxClinicalStage", row.get("maxClinicalStage"))
+                        disease.setdefault("clinicalReports", row.get("clinicalReports"))
+                        rows.append(disease)
+                drug["linkedDiseases"] = {"count": len(rows), "rows": rows}
         return select_fields(result, fields)
 
     async def get_drug_linked_targets(
@@ -108,16 +134,19 @@ class DrugAssociationsApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                linkedTargets {
-                    count
+                mechanismsOfAction {
                     rows {
-                        id
-                        approvedSymbol
-                        approvedName
-                        biotype
-                        proteinIds {
+                        mechanismOfAction
+                        actionType
+                        targets {
                             id
-                            source
+                            approvedSymbol
+                            approvedName
+                            biotype
+                            proteinIds {
+                                id
+                                source
+                            }
                         }
                     }
                 }
@@ -125,6 +154,21 @@ class DrugAssociationsApi:
         }
         """
         result = await client._query(graphql_query, {"chemblId": chembl_id})
+        drug = result.get("drug")
+        if isinstance(drug, dict):
+            targets_by_id: Dict[str, Any] = {}
+            for moa in drug.get("mechanismsOfAction", {}).get("rows", []) or []:
+                if not isinstance(moa, dict):
+                    continue
+                for target in moa.get("targets", []) or []:
+                    if isinstance(target, dict) and target.get("id"):
+                        target.setdefault("mechanismOfAction", moa.get("mechanismOfAction"))
+                        target.setdefault("actionType", moa.get("actionType"))
+                        targets_by_id.setdefault(target["id"], target)
+            drug["linkedTargets"] = {
+                "count": len(targets_by_id),
+                "rows": list(targets_by_id.values()),
+            }
         return select_fields(result, fields)
 
     async def get_drug_literature_occurrences(
@@ -273,8 +317,7 @@ class DrugAssociationsApi:
                             id
                             name
                             drugType
-                            isApproved
-                            maximumClinicalTrialPhase
+                            maximumClinicalStage
                         }
                     }
                 }
@@ -289,4 +332,10 @@ class DrugAssociationsApi:
             "entityNames": entity_names or ["drug"],
             "additionalIds": additional_entity_ids,
         }
-        return await client._query(graphql_query, filter_none_values(variables))
+        result = await client._query(graphql_query, filter_none_values(variables))
+        rows = result.get("drug", {}).get("similarEntities")
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict):
+                    add_legacy_drug_fields(row.get("object"))
+        return result
