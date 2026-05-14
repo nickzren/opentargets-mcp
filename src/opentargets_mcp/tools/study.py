@@ -454,8 +454,7 @@ class StudyApi:
                 colocalisation(page: {index: $pageIndex, size: $pageSize}) {
                     count
                     rows {
-                        leftStudyLocusId
-                        rightStudyLocusId
+                        studyLocusId
                         rightStudyType
                         chromosome
                         colocalisationMethod

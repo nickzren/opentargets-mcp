@@ -4,7 +4,12 @@ Defines API methods and MCP tools related to a target's associations.
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import normalize_clinical_candidate, select_fields
+from ...utils import (
+    build_literature_variables,
+    promote_clinical_candidates,
+    select_fields,
+    trim_literature_occurrences,
+)
 
 class TargetAssociationsApi:
     """
@@ -141,18 +146,7 @@ class TargetAssociationsApi:
         }
         """
         result = await client._query(graphql_query, {"ensemblId": ensembl_id})
-        target = result.get("target")
-        if isinstance(target, dict):
-            candidates = target.pop("drugAndClinicalCandidates", None)
-            if isinstance(candidates, dict):
-                rows = candidates.get("rows")
-                if isinstance(rows, list):
-                    rows = [
-                        normalize_clinical_candidate(row) for row in rows[:page_size]
-                    ]
-                    candidates["rows"] = rows
-                    candidates["count"] = len(rows)
-                target["knownDrugs"] = candidates
+        promote_clinical_candidates(result.get("target"), limit=page_size)
         return select_fields(result, fields)
 
     async def get_target_literature_occurrences(
@@ -240,29 +234,17 @@ class TargetAssociationsApi:
         }
         """
 
-        variables = {
-            "ensemblId": ensembl_id,
-            "additionalIds": additional_entity_ids,
-            "startYear": start_year,
-            "startMonth": start_month,
-            "endYear": end_year,
-            "endMonth": end_month,
-            "cursor": cursor,
-        }
-        variables = {k: v for k, v in variables.items() if v is not None}
-
-        result = await client._query(graphql_query, variables)
-
-        if (
-            size is not None
-            and isinstance(size, int)
-            and size >= 0
-            and result.get("target")
-        ):
-            literature = result["target"].get("literatureOcurrences")
-            if literature and isinstance(literature, dict):
-                rows = literature.get("rows")
-                if isinstance(rows, list):
-                    literature["rows"] = rows[:size]
-
-        return result
+        result = await client._query(
+            graphql_query,
+            build_literature_variables(
+                "ensemblId",
+                ensembl_id,
+                additional_entity_ids=additional_entity_ids,
+                start_year=start_year,
+                start_month=start_month,
+                end_year=end_year,
+                end_month=end_month,
+                cursor=cursor,
+            ),
+        )
+        return trim_literature_occurrences(result, "target", size)

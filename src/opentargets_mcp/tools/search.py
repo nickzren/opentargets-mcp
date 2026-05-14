@@ -158,12 +158,10 @@ class SearchApi:
             direct_search_task, map_ids_task
         )
 
-        best_mapped_hit = None
+        from ..resolver import _best_hit
+
         mappings = mapped_results.get("mapIds", {}).get("mappings", [])
-        if mappings and mappings[0].get("hits"):
-            best_mapped_hit = max(
-                mappings[0]["hits"], key=lambda hit: hit.get("score", 0), default=None
-            )
+        best_mapped_hit = _best_hit(mappings[0]) if mappings else None
 
         direct_hits = direct_results.get("search", {}).get("hits") or []
         direct_top_hit_id = direct_hits[0].get("id") if direct_hits else None

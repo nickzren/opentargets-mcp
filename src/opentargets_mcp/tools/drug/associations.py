@@ -4,7 +4,15 @@ Defines API methods and MCP tools related to a drug's associations with other en
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import add_legacy_drug_fields, filter_none_values, select_fields, validate_required_int
+from ...utils import (
+    add_legacy_drug_fields,
+    build_literature_variables,
+    filter_none_values,
+    flatten_mechanism_targets,
+    select_fields,
+    trim_literature_occurrences,
+    validate_required_int,
+)
 
 class DrugAssociationsApi:
     """
@@ -156,18 +164,13 @@ class DrugAssociationsApi:
         result = await client._query(graphql_query, {"chemblId": chembl_id})
         drug = result.get("drug")
         if isinstance(drug, dict):
-            targets_by_id: Dict[str, Any] = {}
-            for moa in drug.get("mechanismsOfAction", {}).get("rows", []) or []:
-                if not isinstance(moa, dict):
-                    continue
-                for target in moa.get("targets", []) or []:
-                    if isinstance(target, dict) and target.get("id"):
-                        target.setdefault("mechanismOfAction", moa.get("mechanismOfAction"))
-                        target.setdefault("actionType", moa.get("actionType"))
-                        targets_by_id.setdefault(target["id"], target)
+            targets = flatten_mechanism_targets(
+                drug.get("mechanismsOfAction", {}).get("rows", []),
+                copy_mechanism_fields=True,
+            )
             drug["linkedTargets"] = {
-                "count": len(targets_by_id),
-                "rows": list(targets_by_id.values()),
+                "count": len(targets),
+                "rows": targets,
             }
         return select_fields(result, fields)
 
@@ -240,27 +243,20 @@ class DrugAssociationsApi:
             }
         }
         """
-        variables = {
-            "chemblId": chembl_id,
-            "additionalIds": additional_entity_ids,
-            "startYear": start_year,
-            "startMonth": start_month,
-            "endYear": end_year,
-            "endMonth": end_month,
-            "cursor": cursor,
-        }
-        variables = {k: v for k, v in variables.items() if v is not None}
-
-        result = await client._query(graphql_query, variables)
-
-        if size is not None and isinstance(size, int) and size >= 0 and result.get("drug"):
-            literature = result["drug"].get("literatureOcurrences")
-            if literature and isinstance(literature, dict):
-                rows = literature.get("rows")
-                if isinstance(rows, list):
-                    literature["rows"] = rows[:size]
-
-        return result
+        result = await client._query(
+            graphql_query,
+            build_literature_variables(
+                "chemblId",
+                chembl_id,
+                additional_entity_ids=additional_entity_ids,
+                start_year=start_year,
+                start_month=start_month,
+                end_year=end_year,
+                end_month=end_month,
+                cursor=cursor,
+            ),
+        )
+        return trim_literature_occurrences(result, "drug", size)
 
     async def get_drug_similar_entities(
         self,

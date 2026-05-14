@@ -1,9 +1,10 @@
 import aiohttp
 import pytest
 
-from opentargets_mcp.exceptions import ValidationError
+from opentargets_mcp.exceptions import NetworkError, ValidationError
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.settings import ServerSettings
+from opentargets_mcp.resolver import _best_hit, _best_hit_id
 from opentargets_mcp.tools.evidence import EvidenceApi
 from opentargets_mcp.tools.graphql import GraphqlApi
 from opentargets_mcp.tools.search import SearchApi
@@ -11,7 +12,12 @@ from opentargets_mcp.tools.study import StudyApi
 from opentargets_mcp.tools.target import TargetApi
 from opentargets_mcp.tools.variant import VariantApi
 import opentargets_mcp.tools.graphql as graphql_module
-from opentargets_mcp.utils import validate_required_int
+from opentargets_mcp.utils import (
+    flatten_mechanism_targets,
+    page_list,
+    promote_clinical_candidates,
+    validate_required_int,
+)
 
 
 class _FakeResponse:
@@ -168,6 +174,52 @@ async def test_graphql_query_returns_error_envelope_for_http_400():
     assert result["status"] == "error"
     assert result["result"] is None
     assert result["message"][0]["message"] == "Bad query"
+
+
+@pytest.mark.asyncio
+async def test_graphql_query_returns_error_envelope_for_non_json_response():
+    api = GraphqlApi()
+    client = OpenTargetsClient(max_retries=1, retry_delay=0)
+    client.session = _FakeSession([_FakeResponse(status=200, body="<html>bad</html>")])
+
+    result = await api.graphql_query(client, query_string="query { meta { name } }")
+
+    assert result == {
+        "status": "error",
+        "result": None,
+        "message": [{"message": "Non-JSON response from GraphQL endpoint"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_query_returns_partial_data_when_graphql_errors_are_present():
+    client = OpenTargetsClient(max_retries=1, retry_delay=0)
+    client.session = _FakeSession(
+        [
+            _FakeResponse(
+                status=200,
+                body='{"data":{"target":null},"errors":[{"message":"missing"}]}',
+            )
+        ]
+    )
+
+    result = await client._query("query PartialData { target { id } }")
+
+    assert result == {"target": None}
+
+
+@pytest.mark.asyncio
+async def test_query_wraps_non_ok_response_with_client_response_error():
+    client = OpenTargetsClient(max_retries=1, retry_delay=0)
+    client.session = _FakeSession(
+        [_FakeResponse(status=400, body='{"errors":[{"message":"Bad query"}]}')]
+    )
+
+    with pytest.raises(NetworkError) as exc_info:
+        await client._query("query BadField { badField }")
+
+    assert isinstance(exc_info.value.__cause__, aiohttp.ClientResponseError)
+    assert exc_info.value.__cause__.status == 400
 
 
 @pytest.mark.asyncio
@@ -354,6 +406,92 @@ async def test_tool_wrapper_rejects_bool_page_size(monkeypatch):
 def test_validate_required_int_rejects_bool():
     with pytest.raises(ValidationError, match="size must be an integer >= 1."):
         validate_required_int(True, "size")
+
+
+def test_promote_clinical_candidates_preserves_legacy_known_drugs_shape():
+    parent = {
+        "drugAndClinicalCandidates": {
+            "count": 2,
+            "rows": [
+                {
+                    "maxClinicalStage": "PHASE_3",
+                    "drug": {"id": "CHEMBL_A", "maximumClinicalStage": "APPROVAL"},
+                    "clinicalReports": [
+                        {
+                            "id": "NCT1",
+                            "source": "clinicaltrials",
+                            "trialOverallStatus": "Completed",
+                            "url": "https://example.test/NCT1",
+                        }
+                    ],
+                    "diseases": [{"disease": {"id": "EFO_1", "name": "Disease"}}],
+                },
+                {"drug": {"id": "CHEMBL_B"}},
+            ],
+        }
+    }
+
+    promote_clinical_candidates(parent, limit=1)
+
+    assert "drugAndClinicalCandidates" not in parent
+    known_drugs = parent["knownDrugs"]
+    assert known_drugs["count"] == 1
+    assert len(known_drugs["rows"]) == 1
+    row = known_drugs["rows"][0]
+    assert row["phase"] == 3
+    assert row["status"] == "Completed"
+    assert row["urls"] == [
+        {"name": "NCT1", "url": "https://example.test/NCT1"}
+    ]
+    assert row["disease"]["id"] == "EFO_1"
+    assert row["drug"]["isApproved"] is True
+
+
+def test_page_list_preserves_client_side_slice_behavior():
+    assert page_list(["a", "b", "c", "d"], page_index=1, page_size=2) == [
+        "c",
+        "d",
+    ]
+    assert page_list({"not": "a list"}, page_index=1, page_size=2) == {
+        "not": "a list"
+    }
+
+
+def test_best_hit_helper_preserves_full_hit_and_id_access():
+    mapping = {
+        "hits": [
+            {"id": "LOW", "name": "Low", "score": 0.2},
+            {"id": "HIGH", "name": "High", "score": 0.9},
+        ]
+    }
+
+    assert _best_hit(mapping) == {"id": "HIGH", "name": "High", "score": 0.9}
+    assert _best_hit_id(mapping) == "HIGH"
+
+
+def test_flatten_mechanism_targets_deduplicates_and_copies_optional_fields():
+    rows = [
+        {
+            "mechanismOfAction": "inhibits",
+            "actionType": "INHIBITOR",
+            "targets": [
+                {"id": "ENSG1", "approvedSymbol": "A"},
+                {"id": "ENSG2", "approvedSymbol": "B"},
+            ],
+        },
+        {
+            "mechanismOfAction": "binds",
+            "actionType": "BINDER",
+            "targets": [{"id": "ENSG1", "approvedSymbol": "A2"}],
+        },
+    ]
+
+    targets = flatten_mechanism_targets(rows, copy_mechanism_fields=True)
+
+    assert [target["id"] for target in targets] == ["ENSG1", "ENSG2"]
+    assert targets[0]["approvedSymbol"] == "A"
+    assert targets[0]["mechanismOfAction"] == "inhibits"
+    assert targets[0]["actionType"] == "INHIBITOR"
 
 
 @pytest.mark.asyncio

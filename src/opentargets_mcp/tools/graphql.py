@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import time
 import weakref
 from typing import Any, Dict, Optional
 
-import aiohttp
 from graphql import (
     OperationDefinitionNode,
     build_client_schema,
@@ -19,7 +17,7 @@ from graphql import (
     print_schema,
 )
 
-from ..exceptions import NetworkError, ValidationError
+from ..exceptions import ValidationError
 from ..queries import OpenTargetsClient
 
 logger = logging.getLogger(__name__)
@@ -88,83 +86,38 @@ class GraphqlApi:
         if _contains_mutation(query_string):
             raise ValidationError("graphql_query does not support mutations.")
 
-        await client._ensure_session()
-
         payload: Dict[str, Any] = {"query": query_string}
         if variables is not None:
             payload["variables"] = variables
         if operation_name is not None:
             payload["operationName"] = operation_name
 
-        max_retries = getattr(client, "_max_retries", 3)
-        retry_delay = getattr(client, "_retry_delay", 1.0)
-        last_exception: Exception | None = None
+        response = await client._post_graphql(
+            payload,
+            query_for_log=query_string,
+            variables_for_log=variables,
+        )
+        if response.ok:
+            if response.payload is None:
+                return {
+                    "status": "error",
+                    "result": None,
+                    "message": [
+                        {"message": "Non-JSON response from GraphQL endpoint"}
+                    ],
+                }
+            return _wrap_query_result(response.payload)
 
-        for attempt in range(max_retries):
-            try:
-                async with client.session.post(  # type: ignore[union-attr]
-                    client.base_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                ) as response:
-                    response_text = await response.text()
-                    response_payload = _try_parse_payload(response_text)
+        if response.payload is not None and (
+            "errors" in response.payload or "data" in response.payload
+        ):
+            return _wrap_query_result(response.payload)
 
-                    if response.ok:
-                        if response_payload is None:
-                            return {
-                                "status": "error",
-                                "result": None,
-                                "message": [
-                                    {
-                                        "message": "Non-JSON response from GraphQL endpoint"
-                                    }
-                                ],
-                            }
-                        return _wrap_query_result(response_payload)
-
-                    logger.error(
-                        "GraphQL HTTP error %s for %s: %s",
-                        response.status,
-                        response.url,
-                        response_text,
-                    )
-
-                    if (
-                        _is_retryable_status(response.status)
-                        and attempt < max_retries - 1
-                    ):
-                        await asyncio.sleep(retry_delay * (2**attempt))
-                        continue
-
-                    if response_payload is not None and (
-                        "errors" in response_payload or "data" in response_payload
-                    ):
-                        return _wrap_query_result(response_payload)
-
-                    return {
-                        "status": "error",
-                        "result": None,
-                        "message": [
-                            {"message": response_text or f"HTTP {response.status}"}
-                        ],
-                    }
-
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-                last_exception = exc
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (2**attempt))
-                    continue
-                raise NetworkError(f"GraphQL request failed: {exc}") from exc
-            except Exception as exc:
-                raise NetworkError(f"GraphQL request failed: {exc}") from exc
-
-        if last_exception is not None:
-            raise NetworkError(
-                f"GraphQL request failed after {max_retries} retries"
-            ) from last_exception
-
-        raise NetworkError("GraphQL request failed without making any attempts")
+        return {
+            "status": "error",
+            "result": None,
+            "message": [{"message": response.text or f"HTTP {response.status}"}],
+        }
 
     async def graphql_batch_query(
         self,
@@ -279,20 +232,6 @@ def _wrap_query_result(payload: Dict[str, Any]) -> Dict[str, Any]:
     if errors:
         return {"status": "warning", "result": data, "message": errors}
     return {"status": "success", "result": data, "message": None}
-
-
-def _try_parse_payload(response_text: str) -> Dict[str, Any] | None:
-    try:
-        payload = json.loads(response_text)
-    except json.JSONDecodeError:
-        return None
-    if isinstance(payload, dict):
-        return payload
-    return None
-
-
-def _is_retryable_status(status: int) -> bool:
-    return status >= 500 or status == 429
 
 
 def _get_schema_cache_lock() -> asyncio.Lock:

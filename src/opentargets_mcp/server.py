@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import anyio
 import fastmcp
 import functools
@@ -18,7 +19,6 @@ from starlette.responses import JSONResponse, Response
 import mcp.types as mcp_types
 
 from . import __version__
-from .exceptions import ValidationError
 from .queries import OpenTargetsClient
 from .settings import ServerSettings
 from .tools.disease import DiseaseApi
@@ -32,6 +32,7 @@ from .tools.target import TargetApi
 from .tools.variant import VariantApi
 from .tools.workflows import WorkflowApi
 from .resolver import resolve_params
+from .utils import validate_required_int
 
 __all__ = [
     "mcp",
@@ -131,17 +132,14 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
         client = get_client()
         resolved = await resolve_params(client, kwargs)
         if "page_index" in resolved:
-            page_index = resolved["page_index"]
-            if not isinstance(page_index, int) or isinstance(page_index, bool) or page_index < 0:
-                raise ValidationError("page_index must be an integer >= 0.")
+            validate_required_int(resolved["page_index"], "page_index", minimum=0)
         if "page_size" in resolved:
-            page_size = resolved["page_size"]
-            if not isinstance(page_size, int) or isinstance(page_size, bool) or page_size < 1:
-                raise ValidationError("page_size must be an integer >= 1.")
-            if page_size > MAX_PAGE_SIZE:
-                raise ValidationError(
-                    f"page_size must be <= {MAX_PAGE_SIZE}."
-                )
+            validate_required_int(
+                resolved["page_size"],
+                "page_size",
+                minimum=1,
+                maximum=MAX_PAGE_SIZE,
+            )
         return await method(client, **resolved)
 
     params = list(signature.parameters.values())[1:]
@@ -164,11 +162,9 @@ def register_all_api_methods() -> None:
         _variant_api,
         _study_api,
         _meta_api,
+        _graphql_api,
         _workflow_api,
     )
-
-    if _graphql_api is not None:
-        api_instances = (*api_instances, _graphql_api)
 
     for api in api_instances:
         for name in dir(api):
@@ -266,11 +262,7 @@ async def sse_message_fallback(_: Request) -> Response:
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
-def main() -> None:
-    import argparse
-
-    settings = ServerSettings()
-
+def _build_arg_parser(settings: ServerSettings) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Open Targets MCP Server",
         epilog=(
@@ -335,32 +327,42 @@ def main() -> None:
         default=settings.open_targets_rate_limit_burst,
         help="Burst capacity used when rate limiting is enabled",
     )
+    return parser
 
-    args = parser.parse_args()
 
+def _handle_immediate_cli_flags(args: argparse.Namespace) -> bool:
     if args.version:
         print(f"opentargets-mcp {__version__}")
-        return
+        return True
 
     if args.list_tools:
-        async def collect_tools() -> list[Any] | dict[str, Any]:
-            return await mcp.list_tools()
+        tools = anyio.run(_collect_tools)
+        _print_tool_list(tools)
+        return True
 
-        tools = anyio.run(collect_tools)
-        if isinstance(tools, dict):
-            entries = sorted(tools.items(), key=lambda item: item[0])
-        else:
-            entries = sorted(((tool.name, tool) for tool in tools), key=lambda item: item[0])
+    return False
 
-        for name, tool in entries:
-            description = (tool.description or "").strip().splitlines()
-            first_line = description[0] if description else "No description available"
-            print(f"{name}: {first_line}")
-        return
 
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+async def _collect_tools() -> list[Any] | dict[str, Any]:
+    return await mcp.list_tools()
 
+
+def _print_tool_list(tools: list[Any] | dict[str, Any]) -> None:
+    if isinstance(tools, dict):
+        entries = sorted(tools.items(), key=lambda item: item[0])
+    else:
+        entries = sorted(((tool.name, tool) for tool in tools), key=lambda item: item[0])
+
+    for name, tool in entries:
+        description = (tool.description or "").strip().splitlines()
+        first_line = description[0] if description else "No description available"
+        print(f"{name}: {first_line}")
+
+
+def _validate_cli_args(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> None:
     if args.port < 1:
         parser.error("--port must be >= 1")
     if args.port > 65535:
@@ -369,6 +371,14 @@ def main() -> None:
         parser.error("--rate-limit-burst must be >= 1")
     if args.rate_limit_rps < 0:
         parser.error("--rate-limit-rps must be >= 0")
+
+
+def _apply_cli_configuration(
+    args: argparse.Namespace,
+    settings: ServerSettings,
+) -> None:
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     if args.api:
         os.environ["OPEN_TARGETS_API_URL"] = args.api
@@ -391,6 +401,8 @@ def main() -> None:
             args.port,
         )
 
+
+def _log_cli_startup(args: argparse.Namespace) -> None:
     logger.info(
         "Starting Open Targets MCP server (transport=%s, host=%s, port=%s)",
         args.transport,
@@ -404,6 +416,8 @@ def main() -> None:
     else:
         logger.info("Using default Open Targets API URL")
 
+
+def _configure_rate_limiting(args: argparse.Namespace) -> None:
     if args.rate_limit_rps > 0:
         from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 
@@ -420,6 +434,8 @@ def main() -> None:
             args.rate_limit_burst,
         )
 
+
+def _run_transport(args: argparse.Namespace) -> None:
     try:
         if args.transport == "http":
 
@@ -434,6 +450,21 @@ def main() -> None:
     except Exception:  # pragma: no cover - unexpected runtime failure
         logger.exception("Server encountered an unrecoverable error")
         raise
+
+
+def main() -> None:
+    settings = ServerSettings()
+    parser = _build_arg_parser(settings)
+    args = parser.parse_args()
+
+    if _handle_immediate_cli_flags(args):
+        return
+
+    _validate_cli_args(parser, args)
+    _apply_cli_configuration(args, settings)
+    _log_cli_startup(args)
+    _configure_rate_limiting(args)
+    _run_transport(args)
 
 
 if __name__ == "__main__":  # pragma: no cover

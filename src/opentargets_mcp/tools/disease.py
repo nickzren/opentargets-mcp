@@ -5,9 +5,11 @@ Defines API methods and MCP tools related to 'Disease' entities in Open Targets.
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
 from ..utils import (
+    build_literature_variables,
     filter_none_values,
-    normalize_clinical_candidate,
+    promote_clinical_candidates,
     select_fields,
+    trim_literature_occurrences,
     validate_required_int,
 )
 
@@ -215,17 +217,7 @@ class DiseaseApi:
             "efoId": efo_id,
         }
         result = await client._query(graphql_query, filter_none_values(variables))
-        disease = result.get("disease")
-        if isinstance(disease, dict):
-            candidates = disease.pop("drugAndClinicalCandidates", None)
-            if isinstance(candidates, dict):
-                rows = candidates.get("rows")
-                if isinstance(rows, list):
-                    candidates["rows"] = [
-                        normalize_clinical_candidate(row) for row in rows[:validated_size]
-                    ]
-                    candidates["count"] = len(candidates["rows"])
-                disease["knownDrugs"] = candidates
+        promote_clinical_candidates(result.get("disease"), limit=validated_size)
         return result
 
     async def get_disease_ontology(
@@ -349,27 +341,20 @@ class DiseaseApi:
             }
         }
         """
-        variables = {
-            "efoId": efo_id,
-            "additionalIds": additional_entity_ids,
-            "startYear": start_year,
-            "startMonth": start_month,
-            "endYear": end_year,
-            "endMonth": end_month,
-            "cursor": cursor,
-        }
-        variables = {k: v for k, v in variables.items() if v is not None}
-
-        result = await client._query(graphql_query, variables)
-
-        if size is not None and isinstance(size, int) and size >= 0 and result.get("disease"):
-            literature = result["disease"].get("literatureOcurrences")
-            if literature and isinstance(literature, dict):
-                rows = literature.get("rows")
-                if isinstance(rows, list):
-                    literature["rows"] = rows[:size]
-
-        return result
+        result = await client._query(
+            graphql_query,
+            build_literature_variables(
+                "efoId",
+                efo_id,
+                additional_entity_ids=additional_entity_ids,
+                start_year=start_year,
+                start_month=start_month,
+                end_year=end_year,
+                end_month=end_month,
+                cursor=cursor,
+            ),
+        )
+        return trim_literature_occurrences(result, "disease", size)
 
     async def get_disease_similar_entities(
         self,

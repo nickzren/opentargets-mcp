@@ -52,6 +52,10 @@ def select_fields(payload: Any, fields: Optional[Iterable[str]] = None) -> Any:
     if not fields:
         return payload
 
+    return _project_field_tree(payload, _build_field_tree(fields))
+
+
+def _build_field_tree(fields: Iterable[str]) -> dict[str, Any]:
     tree: dict[str, Any] = {}
     for path in fields:
         if not path:
@@ -59,21 +63,124 @@ def select_fields(payload: Any, fields: Optional[Iterable[str]] = None) -> Any:
         node = tree
         for part in filter(None, path.split(".")):
             node = node.setdefault(part, {})
+    return tree
 
-    def project(value: Any, spec: dict[str, Any]) -> Any:
-        if not spec:
-            return value
-        if isinstance(value, list):
-            return [project(item, spec) for item in value]
-        if isinstance(value, dict):
-            output: dict[str, Any] = {}
-            for key, child in spec.items():
-                if key in value:
-                    output[key] = project(value[key], child)
-            return output
+
+def _project_field_tree(value: Any, spec: dict[str, Any]) -> Any:
+    if not spec:
         return value
+    if isinstance(value, list):
+        return [_project_field_tree(item, spec) for item in value]
+    if isinstance(value, dict):
+        output: dict[str, Any] = {}
+        for key, child in spec.items():
+            if key in value:
+                output[key] = _project_field_tree(value[key], child)
+        return output
+    return value
 
-    return project(payload, tree)
+
+def promote_clinical_candidates(
+    parent: Any,
+    *,
+    limit: int,
+    source_key: str = "drugAndClinicalCandidates",
+    target_key: str = "knownDrugs",
+) -> Any:
+    """Move clinical candidates to the legacy known-drugs shape."""
+    if not isinstance(parent, dict):
+        return parent
+
+    candidates = parent.pop(source_key, None)
+    if isinstance(candidates, dict):
+        rows = candidates.get("rows")
+        if isinstance(rows, list):
+            normalized_rows = [
+                normalize_clinical_candidate(row) for row in rows[:limit]
+            ]
+            candidates["rows"] = normalized_rows
+            candidates["count"] = len(normalized_rows)
+        parent[target_key] = candidates
+    return parent
+
+
+def page_list(items: Any, page_index: int, page_size: int) -> Any:
+    """Return a page from list-like API fields; leave non-lists untouched."""
+    if not isinstance(items, list):
+        return items
+    start = page_index * page_size
+    return items[start : start + page_size]
+
+
+def build_literature_variables(
+    entity_key: str,
+    entity_id: str,
+    *,
+    additional_entity_ids: Optional[Iterable[str]] = None,
+    start_year: Optional[int] = None,
+    start_month: Optional[int] = None,
+    end_year: Optional[int] = None,
+    end_month: Optional[int] = None,
+    cursor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build optional variables for literature occurrence queries."""
+    return filter_none_values(
+        {
+            entity_key: entity_id,
+            "additionalIds": additional_entity_ids,
+            "startYear": start_year,
+            "startMonth": start_month,
+            "endYear": end_year,
+            "endMonth": end_month,
+            "cursor": cursor,
+        }
+    )
+
+
+def trim_literature_occurrences(payload: Any, parent_key: str, size: Any) -> Any:
+    """Apply client-side row trimming for literature occurrence payloads."""
+    if (
+        size is None
+        or not isinstance(size, int)
+        or size < 0
+        or not isinstance(payload, dict)
+    ):
+        return payload
+
+    parent = payload.get(parent_key)
+    if not isinstance(parent, dict):
+        return payload
+
+    literature = parent.get("literatureOcurrences")
+    if not isinstance(literature, dict):
+        return payload
+
+    rows = literature.get("rows")
+    if isinstance(rows, list):
+        literature["rows"] = rows[:size]
+    return payload
+
+
+def flatten_mechanism_targets(
+    rows: Any,
+    *,
+    copy_mechanism_fields: bool = False,
+) -> list[dict[str, Any]]:
+    """Return unique targets from mechanisms-of-action rows."""
+    targets_by_id: dict[str, dict[str, Any]] = {}
+    for mechanism in rows or []:
+        if not isinstance(mechanism, dict):
+            continue
+        for target in mechanism.get("targets", []) or []:
+            if not isinstance(target, dict) or not target.get("id"):
+                continue
+            if copy_mechanism_fields:
+                target.setdefault(
+                    "mechanismOfAction", mechanism.get("mechanismOfAction")
+                )
+                target.setdefault("actionType", mechanism.get("actionType"))
+            targets_by_id.setdefault(target["id"], target)
+    return list(targets_by_id.values())
 
 
 def clinical_stage_to_phase(stage: Any) -> int:
@@ -170,12 +277,15 @@ def validate_required_int(
     field_name: str,
     *,
     minimum: int = 1,
+    maximum: Optional[int] = None,
 ) -> int:
-    """Validate that value is an int and greater than or equal to minimum."""
+    """Validate that value is an int within the requested inclusive range."""
     if value is None:
         raise ValidationError(f"{field_name} is required and cannot be None.")
     if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
         raise ValidationError(
             f"{field_name} must be an integer >= {minimum}."
         )
+    if maximum is not None and value > maximum:
+        raise ValidationError(f"{field_name} must be <= {maximum}.")
     return value

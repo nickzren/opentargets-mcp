@@ -3,10 +3,8 @@
 import asyncio
 import json
 import sys
-from typing import Dict, Any, List, Optional
 
 from opentargets_mcp.queries import OpenTargetsClient
-from opentargets_mcp.tools.disease import DiseaseApi
 from opentargets_mcp.tools.meta import MetaApi
 from opentargets_mcp.tools.study import StudyApi
 from opentargets_mcp.tools.target import TargetApi

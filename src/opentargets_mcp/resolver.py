@@ -7,7 +7,6 @@ import re
 from typing import Any, Iterable, Mapping
 
 from .exceptions import ValidationError
-from .tools.meta import MetaApi
 from .queries import OpenTargetsClient
 
 
@@ -87,21 +86,33 @@ _PARAM_SPECS: Mapping[str, _ResolverSpec] = {
     ),
 }
 
-_meta_api = MetaApi()
+_meta_api: Any | None = None
+
+
+def _get_meta_api() -> Any:
+    global _meta_api
+    if _meta_api is None:
+        from .tools.meta import MetaApi
+
+        _meta_api = MetaApi()
+    return _meta_api
 
 
 def _looks_like_id(value: str, patterns: Iterable[re.Pattern[str]]) -> bool:
     return any(pattern.match(value) for pattern in patterns)
 
 
-def _best_hit_id(mapping: Mapping[str, Any]) -> str | None:
+def _best_hit(mapping: Mapping[str, Any]) -> Mapping[str, Any] | None:
     hits = mapping.get("hits", [])
     if not hits:
         return None
-    best = max(hits, key=lambda hit: hit.get("score", 0), default=None)
-    if not best:
-        return None
-    return best.get("id")
+    hit_dicts = [hit for hit in hits if isinstance(hit, Mapping)]
+    return max(hit_dicts, key=lambda hit: hit.get("score", 0), default=None)
+
+
+def _best_hit_id(mapping: Mapping[str, Any]) -> str | None:
+    best = _best_hit(mapping)
+    return best.get("id") if best else None
 
 
 async def _resolve_terms(
@@ -109,7 +120,7 @@ async def _resolve_terms(
     terms: list[str],
     spec: _ResolverSpec,
 ) -> tuple[dict[str, str], list[str]]:
-    result = await _meta_api.map_ids(client, terms, entity_names=list(spec.entity_names))
+    result = await _get_meta_api().map_ids(client, terms, entity_names=list(spec.entity_names))
     mappings = result.get("mapIds", {}).get("mappings", [])
     resolved: dict[str, str] = {}
     unresolved: list[str] = []
@@ -173,4 +184,4 @@ async def resolve_params(
     names = list(params.keys())
     tasks = [resolve_param(client, name, params[name]) for name in names]
     results = await asyncio.gather(*tasks)
-    return dict(zip(names, results))
+    return dict(zip(names, results, strict=True))

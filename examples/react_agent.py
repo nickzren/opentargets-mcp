@@ -6,12 +6,7 @@ import openai
 from dotenv import load_dotenv
 import asyncio
 import logging
-from datetime import datetime
 import textwrap
-
-# Suppress HTTP request logs
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("openai").setLevel(logging.WARNING)
 
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.server import mcp
@@ -23,6 +18,10 @@ from opentargets_mcp.tools.search import SearchApi
 from opentargets_mcp.tools.study import StudyApi
 from opentargets_mcp.tools.target import TargetApi
 from opentargets_mcp.tools.variant import VariantApi
+
+# Suppress HTTP request logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
 
 _API_INSTANCES = (
     TargetApi(),

@@ -36,7 +36,7 @@ async def generate_target_validation_profile(target_symbol: str):
         print(f"Found: '{display_symbol}' with Ensembl ID: {target_id}")
 
         # 2. Assess the target's tractability for small molecules and antibodies
-        print(f"\nStep 2: Assessing druggability and tractability...")
+        print("\nStep 2: Assessing druggability and tractability...")
         tractability_result = await target_api.get_target_tractability(client, target_id)
         tractability_data = tractability_result.get("target", {}).get("tractability", [])
 

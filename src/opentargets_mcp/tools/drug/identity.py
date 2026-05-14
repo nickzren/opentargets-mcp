@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to a drug's identity and classificatio
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import add_legacy_drug_fields, select_fields
+from ...utils import add_legacy_drug_fields, flatten_mechanism_targets, select_fields
 
 class DrugIdentityApi:
     """
@@ -103,16 +103,12 @@ class DrugIdentityApi:
         drug = result.get("drug")
         if isinstance(drug, dict):
             add_legacy_drug_fields(drug)
-            targets_by_id: Dict[str, Any] = {}
-            for moa in drug.get("mechanismsOfAction", {}).get("rows", []) or []:
-                if not isinstance(moa, dict):
-                    continue
-                for target in moa.get("targets", []) or []:
-                    if isinstance(target, dict) and target.get("id"):
-                        targets_by_id.setdefault(target["id"], target)
+            targets = flatten_mechanism_targets(
+                drug.get("mechanismsOfAction", {}).get("rows", [])
+            )
             drug.setdefault(
                 "linkedTargets",
-                {"count": len(targets_by_id), "rows": list(targets_by_id.values())},
+                {"count": len(targets), "rows": targets},
             )
         return select_fields(result, fields)
 

@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to drug safety and pharmacovigilance.
 """
 from typing import Any, Dict
 from ...queries import OpenTargetsClient
-from ...utils import add_legacy_drug_fields
+from ...utils import add_legacy_drug_fields, page_list
 
 class DrugSafetyApi:
     """
@@ -193,8 +193,7 @@ class DrugSafetyApi:
         drug = result.get("drug")
         pgx = drug.get("pharmacogenomics") if isinstance(drug, dict) else None
         if isinstance(pgx, list):
-            start = page_index * page_size
-            drug["pharmacogenomics"] = pgx[start : start + page_size]
+            drug["pharmacogenomics"] = page_list(pgx, page_index, page_size)
         return result
 
     async def get_drug_warnings(self, client: OpenTargetsClient, chembl_id: str) -> Dict[str, Any]:

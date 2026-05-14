@@ -4,6 +4,8 @@ import asyncio
 import copy
 import json
 from collections import OrderedDict
+from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, Dict, Optional
 import time
 import logging
@@ -19,6 +21,16 @@ if not logger.hasHandlers():
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+
+
+@dataclass(frozen=True)
+class _GraphQLHTTPResult:
+    ok: bool
+    status: int
+    url: str
+    text: str
+    payload: Dict[str, Any] | None
+    error: aiohttp.ClientResponseError | None = None
 
 
 class OpenTargetsClient:
@@ -55,7 +67,7 @@ class OpenTargetsClient:
             raise ValueError("retry_delay must be >= 0")
 
         self.base_url = base_url
-        self.session = None
+        self.session: aiohttp.ClientSession | None = None
         self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
         self._cache_ttl = cache_ttl
         self._cache_max_entries = cache_max_entries
@@ -94,7 +106,19 @@ class OpenTargetsClient:
             self._cache.popitem(last=False)
 
     @staticmethod
-    def _parse_json_response(response_text: str) -> Dict[str, Any]:
+    def _try_parse_json_response(response_text: str) -> Dict[str, Any] | None:
+        try:
+            payload = json.loads(response_text)
+        except json.JSONDecodeError:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        return payload
+
+    @classmethod
+    def _parse_json_response(cls, response_text: str) -> Dict[str, Any]:
         try:
             payload = json.loads(response_text)
         except json.JSONDecodeError as exc:
@@ -109,14 +133,134 @@ class OpenTargetsClient:
 
         return payload
 
+    async def _post_graphql(
+        self,
+        payload: Dict[str, Any],
+        *,
+        query_for_log: str,
+        variables_for_log: Optional[Dict[str, Any]] = None,
+    ) -> _GraphQLHTTPResult:
+        await self._ensure_session()
+        last_exception = None
+
+        for attempt in range(self._max_retries):
+            try:
+                assert self.session is not None
+                async with self.session.post(
+                    self.base_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                ) as response:
+                    response_text = await response.text()
+                    result = _GraphQLHTTPResult(
+                        ok=response.ok,
+                        status=response.status,
+                        url=str(response.url),
+                        text=response_text,
+                        payload=self._try_parse_json_response(response_text),
+                        error=None
+                        if response.ok
+                        else aiohttp.ClientResponseError(
+                            request_info=getattr(response, "request_info", None)
+                            or SimpleNamespace(real_url=str(response.url)),
+                            history=getattr(response, "history", ()),
+                            status=response.status,
+                            message=getattr(response, "reason", response_text),
+                            headers=getattr(response, "headers", None),
+                        ),
+                    )
+
+                    if result.ok:
+                        return result
+
+                    logger.error(
+                        "HTTP Error %s for %s. Query: %s... Variables: %s. "
+                        "Response Body: %s",
+                        result.status,
+                        result.url,
+                        query_for_log[:200],
+                        variables_for_log,
+                        result.text,
+                    )
+
+                    if (
+                        (result.status >= 500 or result.status == 429)
+                        and attempt < self._max_retries - 1
+                    ):
+                        delay = self._retry_delay * (2**attempt)
+                        logger.warning(
+                            "Request failed (attempt %s/%s): HTTP %s. "
+                            "Retrying in %.1fs...",
+                            attempt + 1,
+                            self._max_retries,
+                            result.status,
+                            delay,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+
+                    logger.error(
+                        "Request failed after %s attempt(s): HTTP %s. "
+                        "Query: %s... Variables: %s",
+                        attempt + 1,
+                        result.status,
+                        query_for_log[:200],
+                        variables_for_log,
+                    )
+                    return result
+
+            except (
+                aiohttp.ClientError,
+                asyncio.TimeoutError,
+            ) as exc:
+                last_exception = exc
+                if attempt < self._max_retries - 1:
+                    delay = self._retry_delay * (2**attempt)
+                    logger.warning(
+                        "Request failed (attempt %s/%s): %s. Retrying in %.1fs...",
+                        attempt + 1,
+                        self._max_retries,
+                        exc,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                logger.error(
+                    "Request failed after %s attempt(s): %s. Query: %s... "
+                    "Variables: %s",
+                    attempt + 1,
+                    exc,
+                    query_for_log[:200],
+                    variables_for_log,
+                    exc_info=True,
+                )
+                raise NetworkError(f"HTTP request failed: {exc}") from exc
+
+            except Exception as exc:
+                logger.error(
+                    "Unexpected error during GraphQL query: %s. Query: %s... "
+                    "Variables: %s",
+                    exc,
+                    query_for_log[:200],
+                    variables_for_log,
+                    exc_info=True,
+                )
+                raise
+
+        if last_exception:
+            raise NetworkError(
+                f"Request failed after {self._max_retries} retries"
+            ) from last_exception
+
+        raise NetworkError("Request failed without making any attempts")
+
     async def _query(
         self, query: str, variables: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Executes a GraphQL query against the Open Targets API with retry logic.
         """
-        await self._ensure_session()
-
         cache_key = generate_cache_key(query, variables)
 
         cached_data = self._get_cached(cache_key)
@@ -127,89 +271,35 @@ class OpenTargetsClient:
         if variables:
             payload["variables"] = variables
 
-        # Retry logic with exponential backoff
-        last_exception = None
-        for attempt in range(self._max_retries):
-            response_text_for_error = ""
-            try:
-                async with self.session.post(
-                    self.base_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                ) as response:
-                    response_text_for_error = (
-                        await response.text()
-                    )  # Read text early for logging
+        response = await self._post_graphql(
+            payload,
+            query_for_log=query,
+            variables_for_log=variables,
+        )
+        if not response.ok:
+            error = response.error or aiohttp.ClientResponseError(
+                request_info=SimpleNamespace(real_url=response.url),
+                history=(),
+                status=response.status,
+                message=response.text,
+                headers=None,
+            )
+            raise NetworkError(f"HTTP request failed: {error}") from error
 
-                    if not response.ok:
-                        logger.error(
-                            f"HTTP Error {response.status} for {response.url}. "
-                            f"Query: {query[:200]}... Variables: {variables}. "
-                            f"Response Body: {response_text_for_error}"
-                        )
-                        response.raise_for_status()  # This will now raise ClientResponseError
+        result = self._parse_json_response(response.text)
 
-                    result = self._parse_json_response(response_text_for_error)
+        if "errors" in result and result["errors"]:
+            logger.warning(
+                "GraphQL API returned errors: %s. Query: %s... Variables: %s. "
+                "Returning partial data if available.",
+                result["errors"],
+                query[:200],
+                variables,
+            )
 
-                    if "errors" in result and result["errors"]:
-                        logger.warning(
-                            f"GraphQL API returned errors: {result['errors']}. "
-                            f"Query: {query[:200]}... Variables: {variables}. "
-                            f"Returning partial data if available."
-                        )
-                        # Don't raise - return partial data if present
-                        # Some queries legitimately return errors with usable data
-                        # (e.g., querying non-existent IDs returns {target: None} + error)
-
-                    data = result.get("data", {})
-                    self._set_cached(cache_key, data)
-                    return copy.deepcopy(data)
-
-            except (
-                aiohttp.ClientResponseError,
-                aiohttp.ClientError,
-                asyncio.TimeoutError,
-            ) as e:
-                last_exception = e
-                is_retryable = isinstance(
-                    e, (aiohttp.ClientError, asyncio.TimeoutError)
-                )
-
-                if isinstance(e, aiohttp.ClientResponseError):
-                    # Only retry on 5xx errors or specific 429 (rate limit)
-                    is_retryable = e.status >= 500 or e.status == 429
-
-                if is_retryable and attempt < self._max_retries - 1:
-                    delay = self._retry_delay * (2**attempt)  # Exponential backoff
-                    logger.warning(
-                        f"Request failed (attempt {attempt + 1}/{self._max_retries}): {e}. "
-                        f"Retrying in {delay:.1f}s..."
-                    )
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    logger.error(
-                        f"Request failed after {attempt + 1} attempt(s): {e}. "
-                        f"Query: {query[:200]}... Variables: {variables}",
-                        exc_info=True,
-                    )
-                    raise NetworkError(f"HTTP request failed: {e}") from e
-
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error during GraphQL query: {e}. "
-                    f"Query: {query[:200]}... Variables: {variables}",
-                    exc_info=True,
-                )
-                raise
-
-        # If we exhausted all retries
-        if last_exception:
-            raise NetworkError(
-                f"Request failed after {self._max_retries} retries"
-            ) from last_exception
-
-        raise NetworkError("Request failed without making any attempts")
+        data = result.get("data", {})
+        self._set_cached(cache_key, data)
+        return copy.deepcopy(data)
 
     async def close(self):
         """Closes the aiohttp.ClientSession."""

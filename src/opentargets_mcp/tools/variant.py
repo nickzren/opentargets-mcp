@@ -4,7 +4,7 @@ Defines API methods and MCP tools related to 'Variant' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
 from ..queries import OpenTargetsClient
-from ..utils import filter_none_values, select_fields, validate_required_int
+from ..utils import filter_none_values, page_list, select_fields, validate_required_int
 
 class VariantApi:
     """
@@ -281,8 +281,7 @@ class VariantApi:
         variant = result.get("variant")
         pgx = variant.get("pharmacogenomics") if isinstance(variant, dict) else None
         if isinstance(pgx, list):
-            start = page_index * page_size
-            variant["pharmacogenomics"] = pgx[start : start + page_size]
+            variant["pharmacogenomics"] = page_list(pgx, page_index, page_size)
         return result
 
     async def get_variant_evidences(

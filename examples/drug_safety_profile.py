@@ -36,7 +36,7 @@ async def generate_drug_safety_profile(drug_name: str):
         print(f"Found: '{drug_display_name}' with ChEMBL ID: {drug_id}")
 
         # 2. Get drug warnings and withdrawal information
-        print(f"\nStep 2: Checking for black box warnings and withdrawal status...")
+        print("\nStep 2: Checking for black box warnings and withdrawal status...")
         drug_warnings = await drug_api.get_drug_warnings(client, drug_id)
         drug_data = drug_warnings.get("drug", {})
         has_black_box_warning = drug_data.get("blackBoxWarning", False)
