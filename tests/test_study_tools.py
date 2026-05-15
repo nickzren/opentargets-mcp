@@ -70,10 +70,16 @@ class TestStudyTools:
                 assert "colocalisation" in coloc_result["credibleSet"]
 
     async def test_get_credible_sets(self, client: OpenTargetsClient):
-        result = await self.study_api.get_credible_sets(client, page_size=2)
+        result = await self.study_api.get_credible_sets(
+            client,
+            study_ids=[TEST_STUDY_ID],
+            page_size=2,
+        )
         assert result is not None
         assert "credibleSets" in result
         if result.get("credibleSets"):
             assert "count" in result["credibleSets"]
             assert "rows" in result["credibleSets"]
             assert result["credibleSets"]["count"] > 0
+            for row in result["credibleSets"]["rows"]:
+                assert row["studyId"] == TEST_STUDY_ID
