@@ -100,6 +100,13 @@ mcp = FastMCP(
         "6) If a name fails to resolve, call search_entities to find the canonical ID.\n"
         "7) Use graphql_query only if no curated tool fits.\n"
         "8) Use workflow tools for multi-hop disease-target-drug prioritisation.\n"
+        "\n"
+        "Common conventions:\n"
+        "- `fields` accepts dot-paths to trim response payloads "
+        "(e.g., [\"target.approvedSymbol\", \"target.associatedDiseases.rows.disease.name\"]).\n"
+        "- Pagination: `page_index` >= 0, `page_size` in [1, 500].\n"
+        "- Tools auto-resolve free-text names to canonical IDs for ensembl_id/efo_id/chembl_id/variant_id/study_id (and their list variants).\n"
+        "- All tools raise NetworkError on transport failure and ValidationError on bad input.\n"
     ),
     mask_error_details=True,
     lifespan=lifespan,
@@ -118,9 +125,21 @@ _workflow_api = WorkflowApi()
 
 
 def _extract_tool_description(method: Callable[..., Any]) -> str | None:
-    """Extract docstring from a method for FastMCP metadata."""
+    """Extract a compact summary from a method's docstring for FastMCP metadata.
+
+    Returns only the leading summary paragraph (text before the first blank
+    line or `**section**` heading) so per-tool descriptions stay tight while
+    the full docstring remains available for humans via `inspect.getdoc`.
+    """
     doc = inspect.getdoc(method)
-    return doc.strip() if doc else None
+    if not doc:
+        return None
+    head = doc.split("\n\n", 1)[0]
+    bold_idx = head.find("**")
+    if bold_idx != -1:
+        head = head[:bold_idx]
+    summary = head.strip()
+    return summary or None
 
 
 def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:

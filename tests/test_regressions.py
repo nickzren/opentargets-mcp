@@ -748,3 +748,31 @@ async def test_credible_sets_supports_fields_projection():
         fields=["credibleSets.rows.studyId"],
     )
     assert result == {"credibleSets": {"rows": [{"studyId": "GCST001"}]}}
+
+
+def test_extract_tool_description_returns_only_summary_line():
+    from opentargets_mcp.server import _extract_tool_description
+
+    api = TargetApi()
+    summary = _extract_tool_description(api.get_target_info)
+    assert summary == "Retrieve core identity details for a target gene."
+
+    long_doc = (api.get_target_info.__doc__ or "").strip()
+    assert "**When to use**" in long_doc
+    assert summary is not None
+    assert "**When to use**" not in summary
+
+
+def test_extract_tool_description_handles_missing_and_blank_docstrings():
+    from opentargets_mcp.server import _extract_tool_description
+
+    def no_doc():
+        pass
+
+    def only_section_doc():
+        """**When to use**
+        - first line is already a heading
+        """
+
+    assert _extract_tool_description(no_doc) is None
+    assert _extract_tool_description(only_section_doc) is None
