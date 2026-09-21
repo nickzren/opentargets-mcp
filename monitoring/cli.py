@@ -542,11 +542,89 @@ def check_package_health(
     )
 
 
-def main(argv=None) -> int:
+def find_open_canary() -> Optional[dict]:
+    """Return an already-open canary issue, so a rerun stops instead of adopting it."""
+    from .canary import CONDITION as CANARY_CONDITION
+
+    ok, out, _ = _gh(
+        "issue", "list", "--repo", REPO, "--label", LABEL, "--state", "open",
+        "--json", "number,body,url", "--limit", "50",
+    )
+    if not ok:
+        return None
+    try:
+        items = json.loads(out)
+    except Exception:  # noqa: BLE001 - absence of evidence, handled by the caller
+        return None
+    marker = MARKER.format(condition=CANARY_CONDITION)
+    return next(
+        (it for it in items if marker in (it.get("body") or "")),
+        None,
+    )
+
+
+def inspect_issue(number: int) -> Optional[dict]:
+    """Read one issue by number, open or closed.
+
+    load_issue lists only open issues, so it cannot prove a close happened.
+    """
+    ok, out, _ = _gh(
+        "issue", "view", str(number), "--repo", REPO,
+        "--json", "number,state,labels,assignees,comments,body",
+    )
+    if not ok:
+        return None
+    try:
+        return json.loads(out)
+    except Exception:  # noqa: BLE001 - unreadable is not verified
+        return None
+
+
+def run_canary_mode() -> int:
+    from .canary import run_canary
+
+    report = run_canary(
+        now=datetime.now(timezone.utc),
+        find_open_canary=find_open_canary,
+        load_issue=load_issue,
+        apply_action=lambda action, result, issue, now: apply(
+            action, result, issue, now, dry_run=False
+        ),
+        inspect_issue=inspect_issue,
+        owner=OWNER,
+        label=LABEL,
+    )
+    print(json.dumps(report, indent=2))
+    return 0 if report["ok"] else 1
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Monitor the published package.")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--canary",
+        action="store_true",
+        default=False,
+        help="exercise the issue lifecycle against a synthetic condition",
+    )
     parser.add_argument("--retry-delay", type=int, default=RETRY_DELAY_SECONDS)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+
+    if args.canary:
+        if args.dry_run:
+            # Refused rather than silently honoured: a canary that writes
+            # nothing proves nothing, and the point is to prove the writes.
+            print(
+                "--canary cannot be combined with --dry-run: the canary exists "
+                "to exercise writes. Dispatch with canary=true and dry_run=false."
+            )
+            return 2
+        return run_canary_mode()
+
     now = datetime.now(timezone.utc)
 
     pypi_version, pypi_published, pypi_reason = fetch_pypi()
