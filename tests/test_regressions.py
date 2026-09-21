@@ -1,7 +1,7 @@
 import aiohttp
 import pytest
 
-from opentargets_mcp.exceptions import NetworkError, ValidationError
+from opentargets_mcp.exceptions import UpstreamQueryError, ValidationError
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.settings import ServerSettings
 from opentargets_mcp.resolver import _best_hit, _best_hit_id
@@ -192,7 +192,8 @@ async def test_graphql_query_returns_error_envelope_for_non_json_response():
 
 
 @pytest.mark.asyncio
-async def test_query_returns_partial_data_when_graphql_errors_are_present():
+async def test_query_raises_when_graphql_errors_are_present():
+    """Curated tools must fail loudly; partial data stays a raw-tool concern."""
     client = OpenTargetsClient(max_retries=1, retry_delay=0)
     client.session = _FakeSession(
         [
@@ -203,23 +204,25 @@ async def test_query_returns_partial_data_when_graphql_errors_are_present():
         ]
     )
 
-    result = await client._query("query PartialData { target { id } }")
+    with pytest.raises(UpstreamQueryError) as exc_info:
+        await client._query("query PartialData { target { id } }")
 
-    assert result == {"target": None}
+    assert "missing" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_query_wraps_non_ok_response_with_client_response_error():
+async def test_query_raises_upstream_error_with_status_on_non_ok_response():
     client = OpenTargetsClient(max_retries=1, retry_delay=0)
     client.session = _FakeSession(
         [_FakeResponse(status=400, body='{"errors":[{"message":"Bad query"}]}')]
     )
 
-    with pytest.raises(NetworkError) as exc_info:
+    with pytest.raises(UpstreamQueryError) as exc_info:
         await client._query("query BadField { badField }")
 
+    assert "Bad query" in str(exc_info.value)
+    assert exc_info.value.status == 400
     assert isinstance(exc_info.value.__cause__, aiohttp.ClientResponseError)
-    assert exc_info.value.__cause__.status == 400
 
 
 @pytest.mark.asyncio

@@ -14,11 +14,13 @@ from typing import Any, Callable, Optional
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 import mcp.types as mcp_types
 
 from . import __version__
+from .exceptions import UpstreamQueryError
 from .queries import OpenTargetsClient
 from .settings import ServerSettings
 from .tools.disease import DiseaseApi
@@ -107,6 +109,9 @@ mcp = FastMCP(
         "- Pagination: `page_index` >= 0, `page_size` in [1, 500].\n"
         "- Tools auto-resolve free-text names to canonical IDs for ensembl_id/efo_id/chembl_id/variant_id/study_id (and their list variants).\n"
         "- All tools raise NetworkError on transport failure and ValidationError on bad input.\n"
+        "- If the Open Targets API rejects a query, the tool error text carries the upstream "
+        "GraphQL message (e.g. a field renamed by a data release); act on it directly rather "
+        "than introspecting the schema.\n"
     ),
     mask_error_details=True,
     lifespan=lifespan,
@@ -149,17 +154,22 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(method)
     async def wrapper(**kwargs: Any) -> Any:
         client = get_client()
-        resolved = await resolve_params(client, kwargs)
-        if "page_index" in resolved:
-            validate_required_int(resolved["page_index"], "page_index", minimum=0)
-        if "page_size" in resolved:
-            validate_required_int(
-                resolved["page_size"],
-                "page_size",
-                minimum=1,
-                maximum=MAX_PAGE_SIZE,
-            )
-        return await method(client, **resolved)
+        try:
+            resolved = await resolve_params(client, kwargs)
+            if "page_index" in resolved:
+                validate_required_int(resolved["page_index"], "page_index", minimum=0)
+            if "page_size" in resolved:
+                validate_required_int(
+                    resolved["page_size"],
+                    "page_size",
+                    minimum=1,
+                    maximum=MAX_PAGE_SIZE,
+                )
+            return await method(client, **resolved)
+        except UpstreamQueryError as exc:
+            # Actionable upstream detail (e.g. a field renamed by a data
+            # release) must reach the caller despite mask_error_details.
+            raise ToolError(f"Open Targets API rejected the query: {exc}") from exc
 
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]

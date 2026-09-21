@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 import time
 import logging
 
-from .exceptions import NetworkError
+from .exceptions import NetworkError, UpstreamQueryError
 from .utils import generate_cache_key
 
 # Configure basic logging for the client
@@ -21,6 +21,27 @@ if not logger.hasHandlers():
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+
+
+_MAX_ERROR_MESSAGES = 5
+_MAX_ERROR_MESSAGE_CHARS = 500
+
+
+def _extract_graphql_errors(payload: Any) -> list[str]:
+    """Return sanitized ``errors[].message`` strings from a GraphQL envelope."""
+    if not isinstance(payload, dict):
+        return []
+    errors = payload.get("errors")
+    if not isinstance(errors, list):
+        return []
+    messages: list[str] = []
+    for entry in errors[:_MAX_ERROR_MESSAGES]:
+        if not isinstance(entry, dict):
+            continue
+        message = entry.get("message")
+        if isinstance(message, str) and message.strip():
+            messages.append(" ".join(message.split())[:_MAX_ERROR_MESSAGE_CHARS])
+    return messages
 
 
 @dataclass(frozen=True)
@@ -277,6 +298,7 @@ class OpenTargetsClient:
             variables_for_log=variables,
         )
         if not response.ok:
+            upstream_errors = _extract_graphql_errors(response.payload)
             error = response.error or aiohttp.ClientResponseError(
                 request_info=SimpleNamespace(real_url=response.url),
                 history=(),
@@ -284,17 +306,23 @@ class OpenTargetsClient:
                 message=response.text,
                 headers=None,
             )
+            if upstream_errors:
+                raise UpstreamQueryError(
+                    upstream_errors, status=response.status
+                ) from error
             raise NetworkError(f"HTTP request failed: {error}") from error
 
         result = self._parse_json_response(response.text)
 
         if "errors" in result and result["errors"]:
             logger.warning(
-                "GraphQL API returned errors: %s. Query: %s... Variables: %s. "
-                "Returning partial data if available.",
+                "GraphQL API returned errors: %s. Query: %s... Variables: %s.",
                 result["errors"],
                 query[:200],
                 variables,
+            )
+            raise UpstreamQueryError(
+                _extract_graphql_errors(result) or ["Upstream GraphQL error"]
             )
 
         data = result.get("data", {})
