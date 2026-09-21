@@ -1,8 +1,6 @@
 name: Monitor published package
 
-# Phase one ships dispatch-only, defaulting to a dry run, so the proposed issue
-# changes can be inspected before anything posts. Activating the daily schedule
-# is a deliberate follow-up: uncomment the `schedule` block below.
+# Daily runs reconcile real alerts; manual dispatches default to a dry run.
 on:
   workflow_dispatch:
     inputs:
@@ -16,8 +14,8 @@ on:
           dry_run=false; the combination is rejected before any write.
         type: boolean
         default: false
-  # schedule:
-  #   - cron: '17 6 * * *'  # daily
+  schedule:
+    - cron: '17 6 * * *'  # daily at 06:17 UTC
 
 permissions:
   contents: read

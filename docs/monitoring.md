@@ -154,8 +154,49 @@ its bookkeeping unwritten.
 
 `monitoring/` is outside `src/`, so it does not ship to PyPI.
 
-Phase one is dispatch-only and defaults to a dry run. Enabling the daily
-schedule means uncommenting the `schedule` block in the workflow.
+## Operation
+
+Daily monitoring is enabled at **06:17 UTC** on the default branch. Scheduled
+runs reconcile real alerts; manual dispatches default to a dry run and never run
+the canary unless explicitly requested.
+
+To run the normal checks with issue reconciliation:
+
+```bash
+gh workflow run monitor.yml --repo nickzren/opentargets-mcp --ref main \
+  -f dry_run=false -f canary=false
+```
+
+Inspect the report's check statuses and proposed actions, not only the Actions
+conclusion: an UNKNOWN result can exit successfully without establishing health.
+Failed GitHub writes exit non-zero and need investigation in Actions.
+
+[GitHub automatically disables scheduled workflows in public repositories after
+60 days without repository activity](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows).
+This schedule is not an independent watchdog for its own inactivity. After a
+long quiet period, inspect the workflow state and recent runs; if disabled,
+re-enable it and dispatch a normal check:
+
+```bash
+gh workflow view monitor.yml --repo nickzren/opentargets-mcp
+gh run list --workflow monitor.yml --repo nickzren/opentargets-mcp --limit 5
+gh workflow enable monitor.yml --repo nickzren/opentargets-mcp
+```
+
+### Activation evidence
+
+The [first canary run](https://github.com/nickzren/opentargets-mcp/actions/runs/35648795296)
+created [issue #8](https://github.com/nickzren/opentargets-mcp/issues/8) but failed
+its immediate list-based read-back. That issue was closed manually with the
+failed-run evidence preserved after the direct-read fix merged in
+[PR #9](https://github.com/nickzren/opentargets-mcp/pull/9).
+
+The [fresh canary on `dbaa47f`](https://github.com/nickzren/opentargets-mcp/actions/runs/35649919860)
+passed all six lifecycle steps under the Actions token. Independent inspection
+confirmed [issue #10](https://github.com/nickzren/opentargets-mcp/issues/10) was
+CLOSED, assigned to `nickzren`, labelled `monitoring`, and had exactly one marked
+reminder plus the recovery comment. Its final failure count remained 4 through
+the UNKNOWN step. These are observed results; a future run can still fail.
 
 A dry run returns before any write. It verifies the isolated PyPI installation,
 the live assertions, the registry comparison, GitHub reads and the proposed
