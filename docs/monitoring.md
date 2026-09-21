@@ -176,11 +176,17 @@ credentials and prove less.
 
 Three safeguards:
 
-- **Read-back is direct.** The canary captures its issue number and inspects
-  that issue, because `load_issue` lists only open issues — its returning None
-  after a close is indistinguishable from "never existed" or "lookup failed".
-  Labels, assignment, exactly one marked reminder and the CLOSED state are all
-  checked, and any mismatch fails the run.
+- **Every write is checked, and state is read back after each step.** A write
+  that reported an error stops the run before any further mutation: continuing
+  would let the canary close an issue it never successfully updated. After each
+  step the issue is re-read and its state verified — failure count progressing
+  1, 2, 3, 4, 4, the first-failure timestamp unchanged, and the reminder flag —
+  because selecting the right action does not prove the state it produced.
+- **Final read-back is direct.** The canary captures its issue number and
+  inspects that issue, because `load_issue` searches only open issues: after a
+  close it reports no issue, which is also what it reports when none was ever
+  created. Labels, assignment, exactly one marked reminder and the CLOSED state
+  are all checked, and any mismatch fails the run.
 - **`--canary --dry-run` is rejected** before any write, exit 2. A canary that
   writes nothing proves nothing, so the combination fails loudly rather than
   appearing to succeed. The dispatch must select `canary=true, dry_run=false`
