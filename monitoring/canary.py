@@ -161,8 +161,8 @@ def run_canary(
                 failures.append(
                     f"{step.name}: the creation response did not yield an issue "
                     "number, so identity cannot be established. Stopping before "
-                    "any further mutation; the created issue, if one exists, is "
-                    "left open for inspection."
+                    "any further mutation; nothing is closed, so the created "
+                    "issue, if one exists, remains open for inspection."
                 )
                 break
         if first_failure_at is None and observed is not None:
