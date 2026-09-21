@@ -120,6 +120,14 @@ def run_canary(
             failures.append(f"{step.name}: issue lookup failed: {error}")
             break
 
+        # Bind to the issue this run created. Searching by condition again could
+        # hand a concurrently created issue to apply, and failing afterwards
+        # would not undo edits made to the wrong one.
+        identity_problem = _same_issue(step.name, "before mutating", issue, number)
+        if identity_problem:
+            failures.append(identity_problem)
+            break
+
         action = decide(step.result, issue, now=now + step.offset)
         if action.kind is not step.expected_kind:
             failures.append(
@@ -142,9 +150,19 @@ def run_canary(
         if error:
             failures.append(f"{step.name}: read-back failed: {error}")
             break
-        if number is None and observed is not None:
-            number = observed.number
+        if number is None:
+            number = (
+                outcome.get("created_issue")
+                if isinstance(outcome, dict)
+                else None
+            ) or (observed.number if observed else None)
+        if first_failure_at is None and observed is not None:
             first_failure_at = observed.first_failure_at
+
+        identity_problem = _same_issue(step.name, "after read-back", observed, number)
+        if identity_problem:
+            failures.append(identity_problem)
+            break
 
         state_problems = _verify_step_state(step, observed, first_failure_at)
         if state_problems:
@@ -168,6 +186,24 @@ def run_canary(
         "steps": steps_run,
         "issue": number,
     }
+
+
+def _same_issue(
+    step_name: str,
+    when: str,
+    issue: Optional[IssueSnapshot],
+    number: Optional[int],
+) -> Optional[str]:
+    """Refuse to touch anything other than the issue this run created."""
+    if number is None or issue is None:
+        return None
+    if issue.number != number:
+        return (
+            f"{step_name}: {when}, the condition resolved to issue "
+            f"#{issue.number}, not the one this run created (#{number}); "
+            "refusing to modify it"
+        )
+    return None
 
 
 def _applied_ok(step_name: str, outcome: Any) -> Optional[str]:

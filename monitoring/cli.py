@@ -370,6 +370,13 @@ def load_issue(condition: str) -> tuple[Optional[IssueSnapshot], Optional[str]]:
     return None, None
 
 
+def _issue_number_from_url(text: str) -> Optional[int]:
+    for token in reversed((text or "").strip().split("/")):
+        if token.isdigit():
+            return int(token)
+    return None
+
+
 def _read_marker(body: str, key: str, default: str) -> str:
     token = f"<!-- {key}: "
     if token not in body:
@@ -452,13 +459,19 @@ def apply(
         label_error = ensure_label()
         if label_error:
             errors.append(label_error)
-        ok, _, err = _gh(
+        ok, out, err = _gh(
             "issue", "create", "--repo", REPO,
             "--title", f"[monitoring] {action.condition}: {result.summary}",
             "--body", body, "--label", LABEL, "--assignee", OWNER,
         )
         if not ok:
             errors.append(f"issue create failed: {err}")
+        else:
+            # gh prints the new issue URL. Reporting the number lets callers
+            # bind later writes to this issue rather than re-searching for it.
+            created = _issue_number_from_url(out)
+            if created is not None:
+                proposed["created_issue"] = created
     elif action.kind in (ActionKind.UPDATE, ActionKind.REMIND):
         number = str(action.issue_number)
         delivered = reminded
