@@ -160,3 +160,20 @@ class TestTargetTools:
         assert "target" in result
         assert result["target"] is not None
         assert "targetClass" in result["target"]
+
+    async def test_get_target_subcellular_locations_keeps_protein_form(
+        self, client: OpenTargetsClient
+    ):
+        """MYRF localises differently by cleavage product; keep that qualifier."""
+        result = await self.target_api.get_target_subcellular_locations(
+            client, "ENSG00000124920"
+        )
+        locations = result["target"]["subcellularLocations"]
+        assert locations
+        modifiers = {
+            loc["targetModifier"] for loc in locations if loc.get("targetModifier")
+        }
+        assert len(modifiers) > 1, (
+            "MYRF distinguishes N- and C-terminal products; "
+            f"got {modifiers or 'no modifiers'}"
+        )
