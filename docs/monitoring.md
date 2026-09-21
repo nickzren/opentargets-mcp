@@ -182,8 +182,12 @@ Three safeguards:
   step the issue is re-read and its state verified — failure count progressing
   1, 2, 3, 4, 4, the first-failure timestamp unchanged, and the reminder flag —
   because selecting the right action does not prove the state it produced.
-- **Every write targets the issue this run created.** The number comes from
-  the creation response and from nowhere else — there is deliberately no
+- **Every read and write targets the issue this run created.** Once the number
+  is known, reads fetch that issue directly rather than searching by condition.
+  A listing is not strongly consistent — the first live canary run failed
+  because the issue it had just created was not yet visible in the label
+  listing — and a search can also resolve to somebody else's issue. The number
+  comes from the creation response and from nowhere else — there is deliberately no
   fallback to a search, since a search can resolve to somebody else's issue,
   which is the problem the binding exists to prevent. Identity is checked
   before each mutation and after each read-back. If creation yields no usable

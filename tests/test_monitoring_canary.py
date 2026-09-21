@@ -85,6 +85,13 @@ class FakeGitHub:
         raise AssertionError(f"unexpected gh call: {args}")
 
 
+def is_final_inspect(args):
+    """The final inspection asks for assignees; per-step read-back does not."""
+    return " ".join(args[:2]) == "issue view" and any(
+        "assignees" in a for a in args
+    )
+
+
 def run_against(fake, monkeypatch):
     """Run the canary through the real lifecycle functions."""
     monkeypatch.setattr(cli, "_gh", fake)
@@ -96,6 +103,11 @@ def run_against(fake, monkeypatch):
             action, result, issue, now, dry_run=False
         ),
         inspect_issue=cli.inspect_issue,
+        read_back=lambda number, condition: (
+            cli.load_issue_by_number(number, condition)
+            if number is not None
+            else cli.load_issue(condition)
+        ),
         owner=cli.OWNER,
         label=cli.LABEL,
     )
@@ -239,7 +251,7 @@ def test_final_read_back_mismatches_fail(mutate, expected, monkeypatch):
 
     def wrapper(*args):
         ok, out, err = original_view(*args)
-        if " ".join(args[:2]) == "issue view" and ok:
+        if is_final_inspect(args) and ok:
             issue = json.loads(out)
             mutate(issue)
             return ok, json.dumps(issue), err
@@ -250,10 +262,32 @@ def test_final_read_back_mismatches_fail(mutate, expected, monkeypatch):
     assert any(expected in f.lower() for f in report["failures"]), report["failures"]
 
 
+def test_read_back_uses_the_issue_number_not_a_search(monkeypatch):
+    """A just-created issue can be missing from a label listing for a moment."""
+    fake = FakeGitHub()
+    original = fake.__call__
+
+    def wrapper(*args):
+        if " ".join(args[:2]) == "issue list":
+            # Simulate eventual consistency: the listing never shows it.
+            return True, "[]", ""
+        return original(*args)
+
+    report = run_against(wrapper, monkeypatch)
+    assert report["ok"] is True, report["failures"]
+
+
 def test_an_unreadable_issue_is_not_success(monkeypatch):
     """If the final read fails, closure is unproven — not assumed."""
-    fake = FakeGitHub(fail_on={"issue view": "HTTP 500"})
-    report = run_against(fake, monkeypatch)
+    fake = FakeGitHub()
+    original = fake.__call__
+
+    def wrapper(*args):
+        if is_final_inspect(args):
+            return False, "", "HTTP 500"
+        return original(*args)
+
+    report = run_against(wrapper, monkeypatch)
     assert report["ok"] is False
     assert any("unproven" in f for f in report["failures"]), report["failures"]
 
@@ -336,13 +370,15 @@ def test_a_rival_issue_receives_no_writes(monkeypatch):
     fake = FakeGitHub(after_create=inject_rival)
     report = run_against(fake, monkeypatch)
 
-    assert report["ok"] is False
-    assert any("refusing to modify" in f for f in report["failures"]), report["failures"]
+    # Reads are bound to the created number, so the rival is never resolved at
+    # all — it cannot be adopted rather than being detected and refused.
+    assert report["ok"] is True, report["failures"]
     assert all(number != 102 for _, number in fake.mutations), (
         f"the rival issue was modified: {fake.mutations}"
     )
     assert fake.issues[102]["state"] == "OPEN"
     assert fake.issues[102]["comments"] == []
+    assert fake.issues[101]["state"] == "CLOSED", "its own issue is the one closed"
 
 
 def test_the_created_number_comes_from_the_creation_response(monkeypatch):
@@ -384,9 +420,10 @@ def test_binding_survives_a_rival_appearing_later(monkeypatch):
         return original(*args)
 
     report = run_against(wrapper, monkeypatch)
-    assert report["ok"] is False
+    assert report["ok"] is True, report["failures"]
     assert all(number != 102 for _, number in fake.mutations)
     assert fake.issues[102]["state"] == "OPEN"
+    assert fake.issues[102]["comments"] == []
 
 
 @pytest.mark.parametrize(

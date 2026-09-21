@@ -377,6 +377,51 @@ def _issue_number_from_url(text: str) -> Optional[int]:
     return None
 
 
+def _snapshot_from(item: dict, condition: str) -> IssueSnapshot:
+    body = item.get("body") or ""
+    first = _read_marker(body, "first-failure", item.get("createdAt") or "")
+    comments = item.get("comments") or []
+
+    def _is_bot(comment):
+        login = ((comment.get("author") or {}).get("login") or "").lower()
+        return login.startswith("github-actions")
+
+    acknowledged = any(not _is_bot(c) for c in comments) or any(
+        lab.get("name") == "acknowledged" for lab in item.get("labels", [])
+    )
+    comment_marker = REMINDER_COMMENT_MARKER.format(condition=condition)
+    return IssueSnapshot(
+        number=item["number"],
+        state=(item.get("state") or "open").lower(),
+        first_failure_at=datetime.fromisoformat(first.replace("Z", "+00:00")),
+        consecutive_failures=int(_read_marker(body, "failures", "1")),
+        acknowledged=acknowledged,
+        reminded=REMINDED_MARKER in body
+        or any(comment_marker in (c.get("body") or "") for c in comments),
+    )
+
+
+def load_issue_by_number(
+    number: int, condition: str
+) -> tuple[Optional[IssueSnapshot], Optional[str]]:
+    """Read one issue directly by number.
+
+    Fetching by number is strongly consistent, where listing by label is not: a
+    just-created issue can be missing from the list for a moment. It also keeps
+    read-back on the issue this run owns rather than on a search result.
+    """
+    ok, out, err = _gh(
+        "issue", "view", str(number), "--repo", REPO,
+        "--json", "number,body,createdAt,comments,labels,state",
+    )
+    if not ok:
+        return None, f"issue read failed: {err}"
+    try:
+        return _snapshot_from(json.loads(out), condition), None
+    except Exception as exc:  # noqa: BLE001 - reason is reported, not swallowed
+        return None, f"issue read returned unusable output: {exc}"
+
+
 def _read_marker(body: str, key: str, default: str) -> str:
     token = f"<!-- {key}: "
     if token not in body:
@@ -604,6 +649,11 @@ def run_canary_mode() -> int:
             action, result, issue, now, dry_run=False
         ),
         inspect_issue=inspect_issue,
+        read_back=lambda number, condition: (
+            load_issue_by_number(number, condition)
+            if number is not None
+            else load_issue(condition)
+        ),
         owner=OWNER,
         label=LABEL,
     )
