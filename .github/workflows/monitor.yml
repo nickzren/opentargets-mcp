@@ -17,6 +17,13 @@ permissions:
   contents: read
   issues: write
 
+# Reconciliation reads the issue list and then writes to it, so two overlapping
+# runs could both see no issue and both create one. Serialise instead of
+# cancelling: cancelling mid-write could leave an issue created but unrecorded.
+concurrency:
+  group: monitor-published-package
+  cancel-in-progress: false
+
 jobs:
   monitor:
     runs-on: ubuntu-latest

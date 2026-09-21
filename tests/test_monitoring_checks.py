@@ -57,7 +57,11 @@ def test_empty_results_are_unknown_not_pass():
 
 def test_matching_versions_pass():
     result = evaluate_registry_divergence(
-        "0.6.0", "0.6.0", pypi_published_at=NOW, now=NOW
+        "0.6.0",
+        "0.6.0",
+        registry_package_version="0.6.0",
+        pypi_published_at=NOW,
+        now=NOW,
     )
     assert result.status is Status.PASS
 
@@ -77,6 +81,7 @@ def test_divergence_beyond_the_grace_period_fails():
     result = evaluate_registry_divergence(
         "0.5.0",
         "0.6.0",
+        registry_package_version="0.5.0",
         pypi_published_at=NOW - REGISTRY_GRACE - timedelta(hours=1),
         now=NOW,
     )
@@ -88,6 +93,7 @@ def test_long_standing_divergence_fails():
     result = evaluate_registry_divergence(
         "0.2.0",
         "0.6.0",
+        registry_package_version="0.2.0",
         pypi_published_at=NOW - timedelta(days=365),
         now=NOW,
     )
@@ -97,7 +103,11 @@ def test_long_standing_divergence_fails():
 
 def test_unknown_publication_time_does_not_grant_grace():
     result = evaluate_registry_divergence(
-        "0.5.0", "0.6.0", pypi_published_at=None, now=NOW
+        "0.5.0",
+        "0.6.0",
+        registry_package_version="0.5.0",
+        pypi_published_at=None,
+        now=NOW,
     )
     assert result.status is Status.FAIL
 
@@ -171,3 +181,37 @@ def test_registry_package_reference_is_compared():
     )
     assert result.status is Status.FAIL
     assert "0.2.0" in result.summary
+
+
+def test_absent_package_metadata_cannot_establish_recovery():
+    """An empty packages array must not read as a matching listing."""
+    result = evaluate_registry_divergence(
+        "0.6.0",
+        "0.6.0",
+        registry_package_version=None,
+        pypi_published_at=NOW - timedelta(days=30),
+        now=NOW,
+    )
+    assert result.status is Status.UNKNOWN
+
+
+def test_absent_package_metadata_does_not_close_a_standing_issue():
+    from monitoring.model import ActionKind, IssueSnapshot
+    from monitoring.policy import decide
+
+    result = evaluate_registry_divergence(
+        "0.6.0",
+        "0.6.0",
+        registry_package_version=None,
+        pypi_published_at=NOW - timedelta(days=30),
+        now=NOW,
+    )
+    standing = IssueSnapshot(
+        number=4,
+        state="open",
+        first_failure_at=NOW - timedelta(days=200),
+        consecutive_failures=200,
+        acknowledged=False,
+        reminded=True,
+    )
+    assert decide(result, standing, now=NOW).kind is not ActionKind.CLOSE

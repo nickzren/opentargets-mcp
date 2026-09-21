@@ -24,6 +24,7 @@ from typing import Optional
 
 from .checks import (
     EXPECTED_ASSERTIONS,
+    PACKAGE_NAME,
     Observation,
     evaluate_package_health,
     evaluate_registry_divergence,
@@ -55,7 +56,11 @@ NAMES = json.loads(r"""__NAMES__""")
 obs = []
 
 def record(name, ok, detail=""):
-    obs.append({"name": name, "ok": bool(ok), "detail": str(detail)})
+    item = {"name": name, "ok": bool(ok), "detail": str(detail)}
+    obs.append(item)
+    # Streamed immediately: a run cancelled mid-way must not discard the
+    # failures it already observed.
+    print("__OBSERVATION__" + json.dumps(item), flush=True)
 
 def payload(result):
     data = getattr(result, "data", None)
@@ -109,18 +114,26 @@ async def main():
                 bool(flags) and all(f is True for f in flags),
                 "rows=%d panitumumab=%d flags=%r" % (len(rows), len(pani), flags),
             )
+        except Exception as exc:
+            record(NAMES[2], False, "tool error: %s: %s" % (type(exc).__name__, exc))
+
+        try:
+            data = payload(await client.call_tool(
+                "get_target_known_drugs",
+                {"ensembl_id": "ENSG00000146648", "page_size": 3},
+            ))
+            known = data["target"]["knownDrugs"]
+            rows = known.get("rows") or []
+            count = known.get("count", 0)
             record(
                 NAMES[3],
-                known.get("count", 0) > 3,
-                "count=%r rows=%d" % (known.get("count"), len(rows)),
+                len(rows) == 3 and count > len(rows),
+                "count=%r rows=%d" % (count, len(rows)),
             )
         except Exception as exc:
-            msg = "tool error: %s: %s" % (type(exc).__name__, exc)
-            record(NAMES[2], False, msg)
-            record(NAMES[3], False, msg)
+            record(NAMES[3], False, "tool error: %s: %s" % (type(exc).__name__, exc))
 
 asyncio.run(main())
-print("__OBSERVATIONS__" + json.dumps(obs))
 '''
 
 
@@ -172,8 +185,16 @@ def fetch_registry() -> tuple[Optional[str], Optional[str], Optional[str]]:
             if server.get("name") == SERVER_NAME and meta.get("isLatest"):
                 packages = server.get("packages") or []
                 pypi = next(
-                    (p for p in packages if p.get("registryType") == "pypi"), None
+                    (
+                        p
+                        for p in packages
+                        if p.get("registryType") == "pypi"
+                        and p.get("identifier") == PACKAGE_NAME
+                    ),
+                    None,
                 )
+                # A missing entry yields None, which the evaluator treats as
+                # "cannot tell" rather than as agreement.
                 return server.get("version"), (pypi or {}).get("version"), None
     except Exception as exc:  # noqa: BLE001 - reason is reported, not swallowed
         return None, None, f"registry lookup failed: {type(exc).__name__}: {exc}"
@@ -212,21 +233,24 @@ def run_package_probe(
             text=True,
             timeout=600,
         )
-        marker = "__OBSERVATIONS__"
-        line = next(
-            (
-                ln
-                for ln in reversed((done.stdout or "").splitlines())
-                if ln.startswith(marker)
-            ),
-            None,
-        )
-        if line is None:
+        marker = "__OBSERVATION__"
+        observations = [
+            Observation(**json.loads(line[len(marker):]))
+            for line in (done.stdout or "").splitlines()
+            if line.startswith(marker)
+        ]
+        if not observations:
             return None, (
                 f"probe reported nothing (exit {done.returncode}): "
                 f"{_tail(done.stderr)}"
             )
-        return [Observation(**item) for item in json.loads(line[len(marker):])], None
+        # Partial output is kept deliberately: whatever was observed before an
+        # interruption is evidence, and a failure among it is a verdict.
+        return observations, (
+            None
+            if done.returncode == 0
+            else f"probe exited {done.returncode}: {_tail(done.stderr)}"
+        )
     except Exception as exc:  # noqa: BLE001 - reason is reported, not swallowed
         return None, f"probe could not run: {type(exc).__name__}: {exc}"
     finally:
@@ -352,8 +376,16 @@ def apply(
     dry_run: bool,
 ) -> dict:
     first = issue.first_failure_at.isoformat() if issue else now.isoformat()
-    reminded = bool(issue and issue.reminded) or action.kind is ActionKind.REMIND
-    body = issue_body(result, action, now, first, reminded=reminded)
+    # A reminder is only "delivered" once the comment succeeds; presuming it
+    # here would suppress every future reminder if delivery failed.
+    reminded = bool(issue and issue.reminded)
+    body = issue_body(
+        result,
+        action,
+        now,
+        first,
+        reminded=reminded or action.kind is ActionKind.REMIND,
+    )
 
     proposed = {
         "condition": action.condition,
@@ -383,16 +415,29 @@ def apply(
             errors.append(f"issue create failed: {err}")
     elif action.kind in (ActionKind.UPDATE, ActionKind.REMIND):
         number = str(action.issue_number)
+        delivered = reminded
         if action.kind is ActionKind.REMIND:
             ok, _, err = _gh(
                 "issue", "comment", number, "--repo", REPO,
                 "--body", f"@{OWNER} still unacknowledged — {action.reason}.",
             )
-            if not ok:
+            if ok:
+                delivered = True
+            else:
                 errors.append(f"reminder comment failed: {err}")
+        # Rebuild with the marker reflecting what was actually delivered.
+        body = issue_body(result, action, now, first, reminded=delivered)
         ok, _, err = _gh("issue", "edit", number, "--repo", REPO, "--body", body)
         if not ok:
-            errors.append(f"issue edit failed: {err}")
+            errors.append(
+                "issue edit failed: " + err
+                + (
+                    " (reminder was delivered but not recorded; it may repeat)"
+                    if delivered and not reminded
+                    else ""
+                )
+            )
+        proposed["proposed_body"] = body
     elif action.kind is ActionKind.CLOSE:
         ok, _, err = _gh(
             "issue", "close", str(action.issue_number), "--repo", REPO,
@@ -425,6 +470,19 @@ def check_package_health(
     time.sleep(delay)
     observations, probe_reason = run_package_probe(version)
     retried = evaluate_package_health(observations, reason=probe_reason)
+
+    if first.status is Status.FAIL and retried.status is not Status.PASS:
+        # Only a demonstrated pass clears an observed failure. A retry that
+        # could not run is not evidence of recovery, and discarding the first
+        # diagnostic would leave the failure unalerted.
+        return CheckResult(
+            first.condition,
+            Status.FAIL,
+            first.summary,
+            f"{first.detail} (retry after {delay}s did not clear it: "
+            f"{retried.status.value} — {retried.detail})",
+        )
+
     return CheckResult(
         retried.condition,
         retried.status,
