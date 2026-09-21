@@ -6,9 +6,11 @@ were not released for about four and a half months. The exact date the published
 package began failing was never established. Separately, the MCP registry
 advertised 0.2.0 from 2025-09-22 until 2026-09-21.
 
-CI runs only on push and pull request, and it tests `main`. Green tests on
-`main` say nothing about whether the published package works — that is the gap
-this closes, without any claim about how long a given break went unnoticed.
+CI tests checked-out repository code, not the published artifact. That is a
+detection gap, and it is the one this closes. It is not what caused the stale
+versions: those were caused by a release that was never cut and a registry
+publication that was never run. Monitoring would have surfaced both sooner; it
+would not have prevented either.
 
 ## Principle
 
@@ -17,10 +19,17 @@ would have stayed green through the `blackBoxWarning` defect, where the flag was
 derived from a field the query never selected and reported `false` for drugs
 that carry a boxed warning.
 
-The corollary is the rule the implementation is built around: a check that
-failed, was skipped, timed out, or could not run is **UNKNOWN**, never PASS.
-Only a demonstrated pass may close a tracking issue. Absence of evidence is not
-evidence of absence.
+The corollary is the rule the implementation is built around:
+
+- An **observed assertion failure is FAIL**, and stays FAIL unless a later check
+  demonstrates recovery. A subsequent timeout, cancellation or unavailable retry
+  does not downgrade it.
+- An incomplete or unavailable check with no established failure is **UNKNOWN**:
+  insufficient evidence to reach a verdict, in either direction.
+- Only **PASS** closes an issue.
+
+Absence of evidence is not evidence of absence — and it is not evidence of
+failure either.
 
 ## Signals
 
