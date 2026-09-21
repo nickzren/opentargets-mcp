@@ -102,6 +102,39 @@ def _looks_like_id(value: str, patterns: Iterable[re.Pattern[str]]) -> bool:
     return any(pattern.match(value) for pattern in patterns)
 
 
+# Open Targets 26.06 search accepts colon-form ontology identifiers, but the
+# stored IDs (and mapIds) use underscores. Rewrite the prefixes we know.
+_ONTOLOGY_PREFIXES = {
+    "EFO": "EFO",
+    "MONDO": "MONDO",
+    "ORPHANET": "Orphanet",
+    "HP": "HP",
+    "DOID": "DOID",
+    "OTAR": "OTAR",
+}
+_ONTOLOGY_COLON_PATTERN = re.compile(r"^([A-Za-z]+):(\d+)$")
+
+
+def _canonical_ontology_id(value: str) -> str:
+    match = _ONTOLOGY_COLON_PATTERN.match(value)
+    if not match:
+        return value
+    prefix = _ONTOLOGY_PREFIXES.get(match.group(1).upper())
+    if prefix is None:
+        return value
+    return f"{prefix}_{match.group(2)}"
+
+
+def _normalize_term(value: Any, patterns: Iterable[re.Pattern[str]]) -> Any:
+    """Apply notation fixes only when they yield an ID valid for this param."""
+    if not isinstance(value, str):
+        return value
+    candidate = _canonical_ontology_id(value)
+    if candidate != value and _looks_like_id(candidate, patterns):
+        return candidate
+    return value
+
+
 def _best_hit(mapping: Mapping[str, Any]) -> Mapping[str, Any] | None:
     hits = mapping.get("hits", [])
     if not hits:
@@ -151,6 +184,7 @@ async def resolve_param(
     if spec.expects_list:
         if not isinstance(value, list):
             return value
+        value = [_normalize_term(term, spec.id_patterns) for term in value]
         terms = [term for term in value if isinstance(term, str)]
         unresolved = [term for term in terms if not _looks_like_id(term, spec.id_patterns)]
         if not unresolved:
@@ -167,6 +201,7 @@ async def resolve_param(
                 resolved_list.append(term)
         return resolved_list
 
+    value = _normalize_term(value, spec.id_patterns)
     if not isinstance(value, str) or _looks_like_id(value, spec.id_patterns):
         return value
 
