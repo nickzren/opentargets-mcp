@@ -174,7 +174,7 @@ It runs inside GitHub Actions under `GITHUB_TOKEN` with the same `issues: write`
 permission a real alert uses; a local `gh` run would exercise different
 credentials and prove less.
 
-Three safeguards:
+Safeguards:
 
 - **Every write is checked, and state is read back after each step.** A write
   that reported an error stops the run before any further mutation: continuing
@@ -184,10 +184,10 @@ Three safeguards:
   because selecting the right action does not prove the state it produced.
 - **Every read and write targets the issue this run created.** Once the number
   is known, reads fetch that issue directly rather than searching by condition.
-  A listing is not strongly consistent — the first live canary run failed
-  because the issue it had just created was not yet visible in the label
-  listing — and a search can also resolve to somebody else's issue. The number
-  comes from the creation response and from nowhere else — there is deliberately no
+  The first live canary created issue #8, but the immediate label listing did
+  not return it; a later listing did. Direct reads remove that dependency on
+  listing visibility without assuming a consistency guarantee. The number
+  comes from the creation response and from nowhere else — there is no
   fallback to a search, since a search can resolve to somebody else's issue,
   which is the problem the binding exists to prevent. Identity is checked
   before each mutation and after each read-back. If creation yields no usable
@@ -219,3 +219,6 @@ The guarantee on failure is that **execution stops as soon as a failure is
 detected** — not that the issue is left open. Most failures do leave it open,
 because they occur before the close. But if the close succeeds and the final
 read-back then fails, the run fails with the issue already closed.
+
+Normal alert discovery still uses a listing. Daily spacing reduces exposure to
+short visibility delays, but closely spaced manual runs can encounter them.

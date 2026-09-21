@@ -406,9 +406,9 @@ def load_issue_by_number(
 ) -> tuple[Optional[IssueSnapshot], Optional[str]]:
     """Read one issue directly by number.
 
-    Fetching by number is strongly consistent, where listing by label is not: a
-    just-created issue can be missing from the list for a moment. It also keeps
-    read-back on the issue this run owns rather than on a search result.
+    This avoids relying on a listing to discover an issue just created by the
+    run, and keeps read-back bound to that issue. Read failures still propagate
+    as errors; a direct lookup is not assumed to guarantee fresh data.
     """
     ok, out, err = _gh(
         "issue", "view", str(number), "--repo", REPO,
