@@ -322,7 +322,8 @@ class OpenTargetsClient:
                 variables,
             )
             raise UpstreamQueryError(
-                _extract_graphql_errors(result) or ["Upstream GraphQL error"]
+                _extract_graphql_errors(result) or ["Upstream GraphQL error"],
+                status=response.status,
             )
 
         data = result.get("data", {})

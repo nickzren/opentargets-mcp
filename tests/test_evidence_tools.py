@@ -13,16 +13,16 @@ class TestEvidenceTools:
         result = await self.evidence_api.get_target_disease_evidence(client, TEST_TARGET_ID_BRAF, TEST_DISEASE_ID_MELANOMA, size=1)
         assert result is not None
         assert "target" in result
-        if result.get("target"):
-            assert "evidences" in result["target"]
-            if result["target"].get("evidences"):
-                assert "rows" in result["target"]["evidences"]
+        assert result["target"] is not None
+        assert "evidences" in result["target"]
+        if result["target"].get("evidences"):
+            assert "rows" in result["target"]["evidences"]
 
     async def test_get_target_disease_biomarkers(self, client: OpenTargetsClient):
-        result = await self.evidence_api.get_target_disease_biomarkers(client, TEST_TARGET_ID_EGFR, "EFO_0003060", size=1) # EGFR and NSCLC
+        result = await self.evidence_api.get_target_disease_biomarkers(client, TEST_TARGET_ID_EGFR, "MONDO_0005233", size=1) # EGFR and NSCLC
         assert result is not None
         assert "target" in result
-        if result.get("target"):
-            assert "evidences" in result["target"]
-            if result["target"].get("evidences"):
-                assert "rows" in result["target"]["evidences"]
+        assert result["target"] is not None
+        assert "evidences" in result["target"]
+        if result["target"].get("evidences"):
+            assert "rows" in result["target"]["evidences"]

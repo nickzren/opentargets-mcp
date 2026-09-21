@@ -13,73 +13,73 @@ class TestDrugTools:
         result = await self.drug_api.get_drug_info(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert result["drug"]["id"] == TEST_DRUG_ID_VEMURAFENIB
+        assert result["drug"] is not None
+        assert result["drug"]["id"] == TEST_DRUG_ID_VEMURAFENIB
 
     async def test_get_drug_adverse_events(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_adverse_events(client, TEST_DRUG_ID_OSIMERTINIB, page_size=1)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "adverseEvents" in result["drug"]
+        assert result["drug"] is not None
+        assert "adverseEvents" in result["drug"]
 
     async def test_get_drug_pharmacovigilance(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_pharmacovigilance(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "hasBeenWithdrawn" in result["drug"]
-            assert "adverseEvents" in result["drug"]
+        assert result["drug"] is not None
+        assert "hasBeenWithdrawn" in result["drug"]
+        assert "adverseEvents" in result["drug"]
 
     async def test_get_drug_linked_diseases(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_linked_diseases(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "linkedDiseases" in result["drug"]
-            if result["drug"]["linkedDiseases"]:
-                assert "count" in result["drug"]["linkedDiseases"]
-                assert "rows" in result["drug"]["linkedDiseases"]
+        assert result["drug"] is not None
+        assert "linkedDiseases" in result["drug"]
+        if result["drug"]["linkedDiseases"]:
+            assert "count" in result["drug"]["linkedDiseases"]
+            assert "rows" in result["drug"]["linkedDiseases"]
 
     async def test_get_drug_linked_targets(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_linked_targets(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "linkedTargets" in result["drug"]
+        assert result["drug"] is not None
+        assert "linkedTargets" in result["drug"]
 
     async def test_get_drug_warnings(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_warnings(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "hasBeenWithdrawn" in result["drug"]
-            assert "blackBoxWarning" in result["drug"]
+        assert result["drug"] is not None
+        assert "hasBeenWithdrawn" in result["drug"]
+        assert "blackBoxWarning" in result["drug"]
 
     async def test_get_drug_cross_references(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_cross_references(client, TEST_DRUG_ID_VEMURAFENIB)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "crossReferences" in result["drug"]
+        assert result["drug"] is not None
+        assert "crossReferences" in result["drug"]
 
     async def test_get_drug_pharmacogenomics(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_pharmacogenomics(client, TEST_DRUG_ID_OSIMERTINIB, page_size=5)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "pharmacogenomics" in result["drug"]
+        assert result["drug"] is not None
+        assert "pharmacogenomics" in result["drug"]
 
     async def test_get_drug_literature_occurrences(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_literature_occurrences(client, TEST_DRUG_ID_VEMURAFENIB, size=5)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "literatureOcurrences" in result["drug"]
+        assert result["drug"] is not None
+        assert "literatureOcurrences" in result["drug"]
 
     async def test_get_drug_similar_entities(self, client: OpenTargetsClient):
         result = await self.drug_api.get_drug_similar_entities(client, TEST_DRUG_ID_VEMURAFENIB, size=5)
         assert result is not None
         assert "drug" in result
-        if result.get("drug"):
-            assert "similarEntities" in result["drug"]
+        assert result["drug"] is not None
+        assert "similarEntities" in result["drug"]
