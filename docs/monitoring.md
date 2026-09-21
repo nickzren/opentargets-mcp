@@ -90,13 +90,23 @@ the condition, the first-failure timestamp, and the consecutive failure count.
 - **Open** on first observed failure, assigned to the owner, labelled `monitoring`
 - **Update** on repeat failure, incrementing the count so a stale alert visibly
   reads as failing for N runs since a given date
-- **Remind** once, and only once, if unacknowledged past the window
+- **Remind** once, and only once, if unacknowledged past the window. The
+  reminder comment carries its own marker, so deduplication rests on the
+  delivery itself rather than on a follow-up body edit that may fail
 - **Close** only when a later check demonstrably passes
 - **Hold** on UNKNOWN: the issue stays open, the failure count is not reset, and
   no verdict is recorded
 
 Acknowledgement is any comment from someone other than the bot, or the
 `acknowledged` label.
+
+### Partial and interrupted runs
+
+Observations are streamed as they occur and parsed one record at a time. A
+timeout is recovered from the exception, which carries the output the child had
+already written. Neither a cancellation, a timeout, nor a truncated trailing
+record may erase a failure that was already observed: an all-or-nothing parse or
+a discarded timeout buffer would turn an established failure back into silence.
 
 ## Known limits
 
