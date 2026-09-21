@@ -160,5 +160,31 @@ schedule means uncommenting the `schedule` block in the workflow.
 A dry run returns before any write. It verifies the isolated PyPI installation,
 the live assertions, the registry comparison, GitHub reads and the proposed
 decisions. GitHub write permissions and the issue lifecycle — creation, label,
-comments, closure — remain unverified until exercised separately, which needs a
-deliberate canary issue rather than a dry run.
+comments, closure — are not reached by it.
+
+## Canary
+
+Those write paths are proven by `--canary`, which drives the real `decide` and
+`apply` code through a scripted lifecycle against a synthetic `canary`
+condition: open, update, remind, confirm the reminder does not repeat, hold on
+UNKNOWN, close on PASS. The acknowledgement window is reached by advancing the
+clock passed to `decide`, not by waiting.
+
+It runs inside GitHub Actions under `GITHUB_TOKEN` with the same `issues: write`
+permission a real alert uses; a local `gh` run would exercise different
+credentials and prove less.
+
+Three safeguards:
+
+- **Read-back is direct.** The canary captures its issue number and inspects
+  that issue, because `load_issue` lists only open issues — its returning None
+  after a close is indistinguishable from "never existed" or "lookup failed".
+  Labels, assignment, exactly one marked reminder and the CLOSED state are all
+  checked, and any mismatch fails the run.
+- **`--canary --dry-run` is rejected** before any write, exit 2. A canary that
+  writes nothing proves nothing, so the combination fails loudly rather than
+  appearing to succeed. The dispatch must select `canary=true, dry_run=false`
+  explicitly. Canary mode bypasses normal health reconciliation.
+- **A pre-existing open canary stops the run**, reporting its URL. A previous
+  failed attempt is never adopted or closed automatically; a failed canary is
+  left open for inspection.

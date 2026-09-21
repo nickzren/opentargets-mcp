@@ -10,6 +10,12 @@ on:
         description: 'Print proposed issue changes without making any'
         type: boolean
         default: true
+      canary:
+        description: >-
+          Exercise the issue lifecycle against a synthetic condition. Requires
+          dry_run=false; the combination is rejected before any write.
+        type: boolean
+        default: false
   # schedule:
   #   - cron: '17 6 * * *'  # daily
 
@@ -40,9 +46,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           # Scheduled runs post; dispatches honour the input, defaulting to dry.
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
+          CANARY: ${{ inputs.canary || 'false' }}
         run: |
           set -euo pipefail
           args=()
+          # Both flags are passed as selected. The CLI rejects the combination,
+          # so requesting a canary without clearing dry_run fails loudly rather
+          # than quietly running something that writes nothing.
+          if [ "${CANARY}" = "true" ]; then
+            args+=(--canary)
+          fi
           if [ "${DRY_RUN}" != "false" ]; then
             args+=(--dry-run)
           fi
