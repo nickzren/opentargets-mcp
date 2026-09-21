@@ -33,7 +33,7 @@ class DiseaseApi:
         - Provide canonical naming before fetching associations or evidence
 
         **When not to use**
-        - Discovering the correct EFO ID from a name (use `search_entities`)
+        - Discovering the correct disease ID from a name (use `search_entities`)
         - Listing targets linked to the disease (use `get_disease_associated_targets`)
 
         **Parameters**
@@ -489,7 +489,7 @@ class DiseaseApi:
         **Example**
         ```python
         disease_api = DiseaseApi()
-        phenotypes = await disease_api.get_disease_phenotypes(client, "MONDO_0005300")
+        phenotypes = await disease_api.get_disease_phenotypes(client, "MONDO_0004979")
         first_hpo = phenotypes["disease"]["phenotypes"]["rows"][0]["phenotypeHPO"]
         print(first_hpo["id"], first_hpo["name"])
         ```

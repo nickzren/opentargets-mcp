@@ -214,8 +214,7 @@ class TargetBiologyApi:
         **Returns**
         - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "subcellularLocations": [{"location": str, "source": str, "termSL": str, "labelSL": str, "targetModifier": Optional[str]}, ...]}}`.
           `targetModifier` names the protein form a location applies to (e.g. a
-          cleavage product or isoform); it is `null` when the location applies to
-          the whole protein.
+          cleavage product or isoform); it is `null` when no qualifier is supplied.
 
         **Errors**
         - GraphQL/network exceptions propagate.
