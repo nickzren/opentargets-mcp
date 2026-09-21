@@ -62,14 +62,15 @@ def test_matching_versions_pass():
     assert result.status is Status.PASS
 
 
-def test_divergence_within_the_grace_period_passes():
+def test_divergence_within_the_grace_period_is_unknown_not_pass():
+    """Grace suppresses a new alert; it must not assert recovery."""
     result = evaluate_registry_divergence(
         "0.5.0",
         "0.6.0",
         pypi_published_at=NOW - timedelta(hours=2),
         now=NOW,
     )
-    assert result.status is Status.PASS
+    assert result.status is Status.UNKNOWN
 
 
 def test_divergence_beyond_the_grace_period_fails():
@@ -127,3 +128,46 @@ def test_unknown_carries_the_failure_reason():
     )
     assert divergence.status is Status.UNKNOWN
     assert "503" in divergence.detail
+
+
+def test_grace_cannot_close_an_unrelated_standing_divergence():
+    """A new release must not close an issue tracking a year-stale listing."""
+    from monitoring.model import ActionKind, IssueSnapshot
+    from monitoring.policy import decide
+
+    result = evaluate_registry_divergence(
+        "0.2.0",
+        "0.7.0",
+        pypi_published_at=NOW - timedelta(minutes=5),
+        now=NOW,
+    )
+    standing = IssueSnapshot(
+        number=3,
+        state="open",
+        first_failure_at=NOW - timedelta(days=300),
+        consecutive_failures=300,
+        acknowledged=False,
+        reminded=True,
+    )
+    assert decide(result, standing, now=NOW).kind is not ActionKind.CLOSE
+
+
+def test_observed_failure_outranks_assertions_that_never_ran():
+    """A known failure must not be hidden by later unavailability."""
+    observations = [Observation(EXPECTED_ASSERTIONS[0], False, "tool error")]
+    result = evaluate_package_health(observations)
+    assert result.status is Status.FAIL
+    assert "did not run" in result.detail
+
+
+def test_registry_package_reference_is_compared():
+    """A manifest labelled 0.6.0 that points at PyPI 0.2.0 is divergence."""
+    result = evaluate_registry_divergence(
+        "0.6.0",
+        "0.6.0",
+        registry_package_version="0.2.0",
+        pypi_published_at=NOW - timedelta(days=30),
+        now=NOW,
+    )
+    assert result.status is Status.FAIL
+    assert "0.2.0" in result.summary
