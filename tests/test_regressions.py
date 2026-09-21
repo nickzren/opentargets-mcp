@@ -1,3 +1,5 @@
+import pathlib
+
 import aiohttp
 from fastmcp.exceptions import ToolError
 import pytest
@@ -456,6 +458,15 @@ def test_promote_clinical_candidates_preserves_legacy_known_drugs_shape():
     ]
     assert row["disease"]["id"] == "EFO_1"
     assert row["drug"]["isApproved"] is True
+
+
+def test_subcellular_locations_query_selects_target_modifier():
+    """Without targetModifier, isoform-specific locations read as whole-protein."""
+    source = pathlib.Path(
+        "src/opentargets_mcp/tools/target/biology.py"
+    ).read_text()
+    body = source.split("query TargetSubcellularLocations", 1)[1].split('"""', 1)[0]
+    assert "targetModifier" in body
 
 
 def test_page_list_preserves_client_side_slice_behavior():
