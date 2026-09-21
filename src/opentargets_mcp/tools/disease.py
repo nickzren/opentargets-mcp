@@ -38,7 +38,7 @@ class DiseaseApi:
 
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client instance.
-        - `efo_id` (`str`): Disease identifier such as `"EFO_0003884"` or `"MONDO_0007254"`.
+        - `efo_id` (`str`): Disease identifier such as `"MONDO_0005300"` or `"MONDO_0007254"`.
         - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
@@ -50,7 +50,7 @@ class DiseaseApi:
         **Example**
         ```python
         disease_api = DiseaseApi()
-        details = await disease_api.get_disease_info(client, "EFO_0003884")
+        details = await disease_api.get_disease_info(client, "MONDO_0005300")
         print(details["disease"]["name"])
         ```
         """
@@ -112,7 +112,7 @@ class DiseaseApi:
         **Example**
         ```python
         disease_api = DiseaseApi()
-        associations = await disease_api.get_disease_associated_targets(client, "EFO_0003884", page_size=5)
+        associations = await disease_api.get_disease_associated_targets(client, "MONDO_0005300", page_size=5)
         for row in associations["disease"]["associatedTargets"]["rows"]:
             print(row["target"]["approvedSymbol"], row["score"])
         ```
@@ -182,7 +182,7 @@ class DiseaseApi:
         **Example**
         ```python
         disease_api = DiseaseApi()
-        drugs = await disease_api.get_disease_known_drugs(client, "EFO_0000583", size=5)
+        drugs = await disease_api.get_disease_known_drugs(client, "MONDO_0005105", size=5)
         for row in drugs["disease"]["knownDrugs"]["rows"]:
             print(row["drug"]["name"], row["phase"])
         ```
@@ -263,7 +263,7 @@ class DiseaseApi:
 
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
-        - `efo_id` (`str`): Disease identifier such as `"EFO_0000270"`.
+        - `efo_id` (`str`): Disease identifier such as `"MONDO_0004979"`.
 
         **Returns**
         - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "parents": [...], "children": [...], "ancestors": [...], "descendants": [...], "therapeuticAreas": [...], "isTherapeuticArea": bool}}`.
@@ -489,7 +489,7 @@ class DiseaseApi:
         **Example**
         ```python
         disease_api = DiseaseApi()
-        phenotypes = await disease_api.get_disease_phenotypes(client, "EFO_0003884")
+        phenotypes = await disease_api.get_disease_phenotypes(client, "MONDO_0005300")
         first_hpo = phenotypes["disease"]["phenotypes"]["rows"][0]["phenotypeHPO"]
         print(first_hpo["id"], first_hpo["name"])
         ```
@@ -566,7 +566,7 @@ class DiseaseApi:
         **Example**
         ```python
         disease_api = DiseaseApi()
-        projects = await disease_api.get_disease_otar_projects(client, "EFO_0003884")
+        projects = await disease_api.get_disease_otar_projects(client, "MONDO_0005300")
         print([proj["projectName"] for proj in projects["disease"]["otarProjects"]])
         ```
         """

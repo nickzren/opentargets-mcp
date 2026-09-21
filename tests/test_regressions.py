@@ -1,4 +1,5 @@
 import pathlib
+import re
 
 import aiohttp
 from fastmcp.exceptions import ToolError
@@ -827,3 +828,19 @@ def test_extract_tool_description_handles_missing_and_blank_docstrings():
 
     assert _extract_tool_description(no_doc) is None
     assert _extract_tool_description(only_section_doc) is None
+
+
+def test_declared_versions_stay_in_sync():
+    """server.json drifted to 0.4.0 while the package said 0.5.0."""
+    import json
+
+    from opentargets_mcp import __version__
+
+    pyproject = pathlib.Path("pyproject.toml").read_text()
+    declared = re.search(r'^version = "([^"]+)"', pyproject, re.MULTILINE).group(1)
+    assert declared == __version__
+
+    server = json.loads(pathlib.Path("server.json").read_text())
+    assert server["version"] == __version__
+    for package in server["packages"]:
+        assert package["version"] == __version__

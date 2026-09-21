@@ -25,7 +25,7 @@ async def find_drugs_for_disease(disease_name: str):
 
     try:
         # 1. Find the disease ID (EFO ID) using the search tool
-        print(f"\nStep 1: Searching for disease '{disease_name}' to get its EFO ID...")
+        print(f"\nStep 1: Searching for disease '{disease_name}' to get its disease ID...")
         search_results = await search_api.search_entities(client, disease_name, entity_names=["disease"], page_size=1)
         disease_info = search_results.get("search", {}).get("hits", [])
 
@@ -75,7 +75,7 @@ async def find_drugs_for_disease(disease_name: str):
                         "name": drug.get("name"),
                         "id": drug.get("id"),
                         "phase": drug_entry.get("phase"),
-                        "mechanism": drug_entry.get("mechanismOfAction")
+                        "status": drug_entry.get("status")
                     })
 
             results["associated_drugs_by_target"].append({

@@ -99,7 +99,10 @@ class TargetAssociationsApi:
         - `page_size` (`int`): Rows per page.
 
         **Returns**
-        - `Dict[str, Any]` (`count` is the upstream total, which may exceed `len(rows)`): `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "mechanismOfAction": str, "disease": {...}, "phase": int, "status": str, "urls": [...]}, ...]}}}`.
+        - `Dict[str, Any]` (`count` is the upstream total, which may exceed `len(rows)`): `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "maxClinicalStage": str, "diseases": [...], "clinicalReports": [...], "phase": int, "status": str, "disease": {...}, "urls": [...]}, ...]}}}`.
+          `phase`, `status`, `disease` and `urls` are derived for backwards
+          compatibility. `mechanismOfAction` is no longer present on these rows;
+          use `get_drug_info` for a drug's mechanisms.
 
         **Errors**
         - GraphQL/network exceptions are raised by the client.
@@ -198,7 +201,7 @@ class TargetAssociationsApi:
         ```python
         assoc_api = TargetAssociationsApi()
         papers = await assoc_api.get_target_literature_occurrences(
-            client, "ENSG00000157764", additional_entity_ids=["EFO_0003884"], size=10
+            client, "ENSG00000157764", additional_entity_ids=["MONDO_0005300"], size=10
         )
         print(papers["target"]["literatureOcurrences"]["rows"][0]["pmid"])
         ```

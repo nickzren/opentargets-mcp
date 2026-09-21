@@ -150,7 +150,7 @@ class StudyApi:
         **Example**
         ```python
         study_api = StudyApi()
-        studies = await study_api.get_studies_by_disease(client, ["EFO_0003884"], page_size=5)
+        studies = await study_api.get_studies_by_disease(client, ["MONDO_0005300"], page_size=5)
         print([row["id"] for row in studies["studies"]["rows"]])
         ```
         """
