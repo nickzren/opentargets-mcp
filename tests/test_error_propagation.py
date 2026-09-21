@@ -69,6 +69,7 @@ async def test_query_raises_upstream_error_on_http_200_with_errors():
         await client._query("{ target { id } }")
 
     assert MISSING_FIELD_MESSAGE in str(exc_info.value)
+    assert exc_info.value.status == 200
 
 
 @pytest.mark.asyncio

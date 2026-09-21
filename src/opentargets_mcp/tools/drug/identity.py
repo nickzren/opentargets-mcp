@@ -50,8 +50,8 @@ class DrugIdentityApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                synonyms
-                tradeNames
+                synonyms { label source }
+                tradeNames { label source }
                 drugType
                 description
                 maximumClinicalStage
@@ -146,7 +146,7 @@ class DrugIdentityApi:
             drug(chemblId: $chemblId) {
                 id
                 name
-                synonyms
+                synonyms { label source }
                 crossReferences {
                     source
                     ids

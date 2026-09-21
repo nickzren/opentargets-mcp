@@ -300,8 +300,8 @@ class MetaApi:
                     warningType
                     toxicityClass
                 }
-                synonyms
-                tradeNames
+                synonyms { label source }
+                tradeNames { label source }
             }
         }
         """

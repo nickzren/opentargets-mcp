@@ -650,12 +650,15 @@ async def test_target_expression_supports_fields_projection():
             return {
                 "target": {
                     "id": "ENSG00000157764",
-                    "expressions": [
-                        {
-                            "tissue": {"label": "Liver"},
-                            "rna": {"level": "medium"},
-                        }
-                    ],
+                    "baselineExpression": {
+                        "count": 1,
+                        "rows": [
+                            {
+                                "tissueBiosample": {"biosampleName": "liver"},
+                                "median": 12.5,
+                            }
+                        ],
+                    },
                 }
             }
 
@@ -663,17 +666,19 @@ async def test_target_expression_supports_fields_projection():
     result = await api.get_target_expression(
         _FakeClient(),
         "ENSG00000157764",
-        fields=["target.expressions.tissue.label"],
+        fields=["target.baselineExpression.rows.tissueBiosample.biosampleName"],
     )
     assert result == {
         "target": {
-            "expressions": [
-                {
-                    "tissue": {
-                        "label": "Liver",
+            "baselineExpression": {
+                "rows": [
+                    {
+                        "tissueBiosample": {
+                            "biosampleName": "liver",
+                        }
                     }
-                }
-            ]
+                ]
+            }
         }
     }
 

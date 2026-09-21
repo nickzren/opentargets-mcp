@@ -110,8 +110,8 @@ mcp = FastMCP(
         "- Tools auto-resolve free-text names to canonical IDs for ensembl_id/efo_id/chembl_id/variant_id/study_id (and their list variants).\n"
         "- All tools raise NetworkError on transport failure and ValidationError on bad input.\n"
         "- If the Open Targets API rejects a query, the tool error text carries the upstream "
-        "GraphQL message (e.g. a field renamed by a data release); act on it directly rather "
-        "than introspecting the schema.\n"
+        "GraphQL message (e.g. a field renamed by a data release). Act on that message first; "
+        "introspect the schema when it does not name a replacement.\n"
     ),
     mask_error_details=True,
     lifespan=lifespan,

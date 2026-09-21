@@ -15,14 +15,16 @@ class TargetBiologyApi:
         self,
         client: OpenTargetsClient,
         ensembl_id: str,
+        page_index: int = 0,
+        page_size: int = 25,
         fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Return RNA and protein expression profiles for a target across tissues.
+        """Return baseline expression measurements for a target across biosamples.
 
         **When to use**
-        - Provide tissue-context for a target in exploratory analyses
-        - Compare RNA versus protein expression across anatomical systems
-        - Identify tissues with elevated expression before target safety review
+        - Provide tissue- or cell-type context for a target in exploratory analyses
+        - Compare expression levels and specificity across biosamples
+        - Identify biosamples with elevated expression before target safety review
 
         **When not to use**
         - Exploring gene constraint or essentiality (use dedicated tools)
@@ -31,10 +33,12 @@ class TargetBiologyApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier.
+        - `page_index` (`int`): Zero-based page index.
+        - `page_size` (`int`): Rows per page; a target can have >1000 rows.
         - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
-        - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "expressions": [{"tissue": {...}, "rna": {...}, "protein": {...}}, ...]}}`.
+        - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "baselineExpression": {"count": int, "rows": [{"datasourceId": str, "tissueBiosample": {...}, "median": float, ...}, ...]}}}`.
 
         **Errors**
         - GraphQL/network exceptions propagate via the client.
@@ -43,23 +47,38 @@ class TargetBiologyApi:
         ```python
         biology_api = TargetBiologyApi()
         expression = await biology_api.get_target_expression(client, "ENSG00000157764")
-        print(expression["target"]["expressions"][0]["tissue"]["label"])
+        print(expression["target"]["baselineExpression"]["rows"][0]["tissueBiosample"]["biosampleName"])
         ```
         """
         graphql_query = """
-        query TargetExpression($ensemblId: String!) {
+        query TargetExpression($ensemblId: String!, $pageIndex: Int!, $pageSize: Int!) {
             target(ensemblId: $ensemblId) {
                 id
                 approvedSymbol
-                expressions {
-                    tissue { id, label, organs, anatomicalSystems }
-                    rna { level, unit, value, zscore }
-                    protein { level, reliability, cellType { name, level, reliability } }
+                baselineExpression(page: {index: $pageIndex, size: $pageSize}) {
+                    count
+                    rows {
+                        datasourceId
+                        datatypeId
+                        unit
+                        median
+                        min
+                        max
+                        q1
+                        q3
+                        specificity_score
+                        distribution_score
+                        tissueBiosample { biosampleId, biosampleName }
+                        celltypeBiosample { biosampleId, biosampleName }
+                    }
                 }
             }
         }
         """
-        result = await client._query(graphql_query, {"ensemblId": ensembl_id})
+        result = await client._query(
+            graphql_query,
+            {"ensemblId": ensembl_id, "pageIndex": page_index, "pageSize": page_size},
+        )
         return select_fields(result, fields)
 
     async def get_target_pathways_and_go_terms(

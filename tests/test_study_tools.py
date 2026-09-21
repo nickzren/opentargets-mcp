@@ -15,10 +15,10 @@ class TestStudyTools:
         result = await self.study_api.get_study_info(client, TEST_STUDY_ID)
         assert result is not None
         assert "study" in result
-        if result.get("study"):
-            assert result["study"]["id"] == TEST_STUDY_ID
-            assert "studyType" in result["study"]
-            assert "traitFromSource" in result["study"]
+        assert result["study"] is not None
+        assert result["study"]["id"] == TEST_STUDY_ID
+        assert "studyType" in result["study"]
+        assert "traitFromSource" in result["study"]
 
     async def test_get_studies_by_disease(self, client: OpenTargetsClient):
         result = await self.study_api.get_studies_by_disease(
@@ -36,8 +36,8 @@ class TestStudyTools:
         )
         assert result is not None
         assert "study" in result
-        if result.get("study"):
-            assert "credibleSets" in result["study"]
+        assert result["study"] is not None
+        assert "credibleSets" in result["study"]
 
     async def test_get_credible_set_by_id(self, client: OpenTargetsClient):
         seed = await self.study_api.get_study_credible_sets(
