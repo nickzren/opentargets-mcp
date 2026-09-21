@@ -14,6 +14,7 @@ from typing import Optional, Sequence
 from .model import CheckResult, Status
 
 REGISTRY_GRACE = timedelta(hours=24)
+PACKAGE_NAME = "opentargets-mcp"
 
 # Positive, observable expectations. An exception-only check would have stayed
 # green through the blackBoxWarning defect, so each assertion names a value.
@@ -119,13 +120,23 @@ def evaluate_registry_divergence(
             reason or f"{which} unavailable",
         )
 
+    if registry_package_version is None:
+        # Without the package reference we cannot tell what the listing sends
+        # users to, so we cannot establish recovery — only that we do not know.
+        return CheckResult(
+            condition,
+            Status.UNKNOWN,
+            "registry package metadata unavailable",
+            reason
+            or (
+                f"no pypi package entry for {PACKAGE_NAME!r}; manifest says "
+                f"{registry_version}"
+            ),
+        )
+
     # The manifest label and the package it points at can disagree; a listing
     # labelled 0.6.0 that references PyPI 0.2.0 still sends users to 0.2.0.
-    advertised = {registry_version}
-    if registry_package_version is not None:
-        advertised.add(registry_package_version)
-
-    if advertised == {pypi_version}:
+    if {registry_version, registry_package_version} == {pypi_version}:
         return CheckResult(
             condition, Status.PASS, f"both advertise {pypi_version}"
         )

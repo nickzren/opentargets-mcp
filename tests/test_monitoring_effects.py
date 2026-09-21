@@ -246,7 +246,7 @@ def test_a_persistent_failure_still_alerts(monkeypatch):
 
     result = cli.check_package_health("0.6.0", None, delay=1)
     assert result.status is Status.FAIL
-    assert "confirmed by retry" in result.detail
+    assert "did not clear it" in result.detail
 
 
 def test_a_passing_probe_is_not_retried(monkeypatch):
@@ -281,7 +281,11 @@ def test_registry_fetch_reads_the_pypi_package_version(monkeypatch):
                         "name": cli.SERVER_NAME,
                         "version": "0.6.0",
                         "packages": [
-                            {"registryType": "pypi", "version": "0.2.0"},
+                            {
+                                "registryType": "pypi",
+                                "identifier": "opentargets-mcp",
+                                "version": "0.2.0",
+                            },
                         ],
                     },
                     "_meta": {
@@ -293,3 +297,151 @@ def test_registry_fetch_reads_the_pypi_package_version(monkeypatch):
     )
     manifest, package, reason = cli.fetch_registry()
     assert (manifest, package, reason) == ("0.6.0", "0.2.0", None)
+
+
+def _registry_payload(packages):
+    return {
+        "servers": [
+            {
+                "server": {
+                    "name": cli.SERVER_NAME,
+                    "version": "0.6.0",
+                    "packages": packages,
+                },
+                "_meta": {
+                    "io.modelcontextprotocol.registry/official": {"isLatest": True}
+                },
+            }
+        ]
+    }
+
+
+def test_empty_packages_array_yields_no_package_version(monkeypatch):
+    monkeypatch.setattr(cli, "_json", lambda url: _registry_payload([]))
+    assert cli.fetch_registry()[1] is None
+
+
+def test_a_different_package_identifier_is_not_ours(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "_json",
+        lambda url: _registry_payload(
+            [{"registryType": "pypi", "identifier": "something-else", "version": "9.9"}]
+        ),
+    )
+    assert cli.fetch_registry()[1] is None
+
+
+def test_an_unrunnable_retry_does_not_erase_an_observed_failure(monkeypatch):
+    """Only a demonstrated pass clears a failure."""
+    bad = [Observation(EXPECTED_ASSERTIONS[0], False, "got None")] + [
+        Observation(name, True) for name in EXPECTED_ASSERTIONS[1:]
+    ]
+    attempts = []
+
+    def fake_probe(version):
+        attempts.append(version)
+        if len(attempts) == 1:
+            return bad, None
+        return None, "probe could not run: runner died"
+
+    monkeypatch.setattr(cli, "run_package_probe", fake_probe)
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+
+    result = cli.check_package_health("0.6.0", None, delay=1)
+    assert result.status is Status.FAIL
+    assert "got None" in result.detail, "the original diagnostic must survive"
+    assert "did not clear it" in result.detail
+
+
+def test_partial_probe_output_survives_interruption(monkeypatch):
+    """A failure observed before cancellation is still a verdict."""
+    streamed = (
+        '__OBSERVATION__'
+        + json.dumps(
+            {"name": EXPECTED_ASSERTIONS[0], "ok": False, "detail": "tool error"}
+        )
+        + "\n"
+    )
+
+    class Setup:
+        returncode = 0
+        stdout = ""
+        stderr = b""
+
+    class Killed:
+        returncode = -9
+        stdout = streamed
+        stderr = "Killed"
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        # venv creation and pip install succeed; the probe is then cancelled.
+        return Setup() if len(calls) <= 2 else Killed()
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.tempfile, "mkdtemp", lambda prefix="": "/tmp/nope")
+    monkeypatch.setattr(cli.shutil, "rmtree", lambda *a, **k: None)
+    monkeypatch.setattr(cli.Path, "write_text", lambda self, text: None)
+
+    observations, reason = cli.run_package_probe("0.6.0")
+    assert observations and observations[0].ok is False
+    assert reason and "exited" in reason
+    assert evaluate_package_health(observations).status is Status.FAIL
+
+
+def test_a_failed_reminder_is_not_recorded_as_delivered(monkeypatch):
+    def fake_gh(*args):
+        if args[0] == "issue" and args[1] == "comment":
+            return False, "", "comment failed"
+        return True, "", ""
+
+    monkeypatch.setattr(cli, "_gh", fake_gh)
+    action = Action(ActionKind.REMIND, "package-health", "overdue", 6, 11)
+    proposed = cli.apply(action, failing(), snapshot(), NOW, dry_run=False)
+
+    assert proposed["applied"] is False
+    assert cli.REMINDED_MARKER not in proposed["proposed_body"], (
+        "an undelivered reminder must not be marked delivered"
+    )
+
+
+def test_a_delivered_reminder_that_fails_to_record_is_reported(monkeypatch):
+    def fake_gh(*args):
+        if args[0] == "issue" and args[1] == "edit":
+            return False, "", "edit failed"
+        return True, "", ""
+
+    monkeypatch.setattr(cli, "_gh", fake_gh)
+    action = Action(ActionKind.REMIND, "package-health", "overdue", 6, 11)
+    proposed = cli.apply(action, failing(), snapshot(), NOW, dry_run=False)
+
+    assert proposed["applied"] is False
+    assert any("may repeat" in e for e in proposed["errors"])
+
+
+def test_successful_reminder_records_delivery(monkeypatch):
+    monkeypatch.setattr(cli, "_gh", lambda *a: (True, "", ""))
+    action = Action(ActionKind.REMIND, "package-health", "overdue", 6, 11)
+    proposed = cli.apply(action, failing(), snapshot(), NOW, dry_run=False)
+    assert proposed["applied"] is True
+    assert cli.REMINDED_MARKER in proposed["proposed_body"]
+
+
+def test_count_assertion_uses_a_small_page():
+    """A count wrongly set to the page length must not pass."""
+    assert '"page_size": 3' in cli.PROBE_TEMPLATE
+    assert "len(rows) == 3 and count > len(rows)" in cli.PROBE_TEMPLATE
+
+
+def test_workflow_serialises_reconciliation():
+    """Lookup and create are separate steps; overlapping runs must queue."""
+    import pathlib
+
+    workflow = pathlib.Path(".github/workflows/monitor.yml").read_text()
+    assert "concurrency:" in workflow
+    assert "cancel-in-progress: false" in workflow, (
+        "cancelling mid-write could leave an issue created but unrecorded"
+    )

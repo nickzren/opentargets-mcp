@@ -118,6 +118,12 @@ reported as such and suppresses action for that condition, because treating it
 as "no issue exists" would open a duplicate every run; failed writes are
 reported and make the run exit non-zero.
 
+Reconciliation is serialised by a workflow `concurrency` group with
+`cancel-in-progress: false`. Lookup and creation are separate steps, so two
+overlapping runs could otherwise both observe no issue and both create one;
+cancelling an in-flight run instead of queueing could leave an issue created but
+its bookkeeping unwritten.
+
 ## Layout
 
 - `monitoring/model.py` — shared types, including the three-valued `Status`
