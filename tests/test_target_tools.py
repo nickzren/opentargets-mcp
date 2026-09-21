@@ -95,11 +95,13 @@ class TestTargetTools:
         assert "chemicalProbes" in result["target"]
 
     async def test_get_target_tep(self, client: OpenTargetsClient):
-        result = await self.target_api.get_target_tep(client, "ENSG00000106630")
+        # PARP14: a target that actually carries a Target Enabling Package.
+        result = await self.target_api.get_target_tep(client, "ENSG00000173193")
         assert result is not None
         assert "target" in result
         assert result["target"] is not None
-        assert "tep" in result["target"]
+        assert result["target"]["tep"] is not None
+        assert result["target"]["tep"]["name"]
 
     async def test_get_target_literature_occurrences(self, client: OpenTargetsClient):
         result = await self.target_api.get_target_literature_occurrences(client, TEST_TARGET_ID_BRAF, size=1)

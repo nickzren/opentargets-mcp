@@ -15,9 +15,9 @@ class TargetBiologyApi:
         self,
         client: OpenTargetsClient,
         ensembl_id: str,
+        fields: Optional[List[str]] = None,
         page_index: int = 0,
         page_size: int = 25,
-        fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Return baseline expression measurements for a target across biosamples.
 
@@ -33,9 +33,9 @@ class TargetBiologyApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier.
+        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
         - `page_index` (`int`): Zero-based page index.
         - `page_size` (`int`): Rows per page; a target can have >1000 rows.
-        - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
         - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "baselineExpression": {"count": int, "rows": [{"datasourceId": str, "tissueBiosample": {...}, "median": float, ...}, ...]}}}`.

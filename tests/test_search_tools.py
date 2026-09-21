@@ -2,7 +2,12 @@
 import pytest
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.search import SearchApi
-from .conftest import TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR
+from .conftest import (
+    TEST_DISEASE_ID_ASTHMA,
+    TEST_DRUG_ID_VEMURAFENIB,
+    TEST_TARGET_ID_BRAF,
+    TEST_TARGET_ID_EGFR,
+)
 
 @pytest.mark.asyncio
 class TestSearchTools:
@@ -13,28 +18,36 @@ class TestSearchTools:
         result = await self.search_api.search_entities(client, "BRAF", entity_names=["target"], page_size=1)
         assert result is not None
         assert "search" in result
-        if result.get("search") and result["search"].get("hits"):
-            assert result["search"]["hits"][0]["entity"] == "target"
+        hits = result["search"]["hits"]
+        assert hits, "BRAF is a known-positive fixture; empty hits is a failure"
+        assert hits[0]["entity"] == "target"
+        assert hits[0]["id"] == TEST_TARGET_ID_BRAF
 
     async def test_search_entities_disease(self, client: OpenTargetsClient):
         result = await self.search_api.search_entities(client, "asthma", entity_names=["disease"], page_size=1)
         assert result is not None
         assert "search" in result
-        if result.get("search") and result["search"].get("hits"):
-             assert result["search"]["hits"][0]["entity"] == "disease"
+        hits = result["search"]["hits"]
+        assert hits, "asthma is a known-positive fixture; empty hits is a failure"
+        assert hits[0]["entity"] == "disease"
+        assert hits[0]["id"] == TEST_DISEASE_ID_ASTHMA
 
     async def test_search_entities_drug(self, client: OpenTargetsClient):
         result = await self.search_api.search_entities(client, "vemurafenib", entity_names=["drug"], page_size=1)
         assert result is not None
         assert "search" in result
-        if result.get("search") and result["search"].get("hits"):
-            assert result["search"]["hits"][0]["entity"] == "drug"
+        hits = result["search"]["hits"]
+        assert hits, "vemurafenib is a known-positive fixture; empty hits is a failure"
+        assert hits[0]["entity"] == "drug"
+        assert hits[0]["id"] == TEST_DRUG_ID_VEMURAFENIB
 
     async def test_search_entities_multiple(self, client: OpenTargetsClient):
         result = await self.search_api.search_entities(client, "cancer", entity_names=["target", "disease"], page_size=2)
         assert result is not None
         assert "search" in result
-        assert "hits" in result["search"]
+        hits = result["search"]["hits"]
+        assert hits, "cancer is a known-positive fixture; empty hits is a failure"
+        assert {hit["entity"] for hit in hits} <= {"target", "disease"}
 
     async def test_search_entity_resolver(self, client: OpenTargetsClient):
         """

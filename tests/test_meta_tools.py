@@ -81,21 +81,19 @@ class TestMetaTools:
         result = await self.meta_api.get_targets_batch(client, [TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR])
         assert result is not None
         assert "targets" in result
-        if result.get("targets"):
-            assert len(result["targets"]) == 2
+        returned_ids = {t["id"] for t in result["targets"] if isinstance(t, dict)}
+        assert returned_ids == {TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR}
 
     async def test_get_diseases_batch(self, client: OpenTargetsClient):
         result = await self.meta_api.get_diseases_batch(client, [TEST_DISEASE_ID_ASTHMA, TEST_DISEASE_ID_MELANOMA])
         assert result is not None
         assert "diseases" in result
-        if result.get("diseases"):
-            assert len(result["diseases"]) == 2
+        returned_ids = {d["id"] for d in result["diseases"] if isinstance(d, dict)}
+        assert returned_ids == {TEST_DISEASE_ID_ASTHMA, TEST_DISEASE_ID_MELANOMA}
 
     async def test_get_drugs_batch(self, client: OpenTargetsClient):
         result = await self.meta_api.get_drugs_batch(client, [TEST_DRUG_ID_VEMURAFENIB, TEST_DRUG_ID_OSIMERTINIB])
         assert result is not None
         assert "drugs" in result
-        if result.get("drugs"):
-            returned_ids = {drug.get("id") for drug in result["drugs"] if isinstance(drug, dict)}
-            assert returned_ids
-            assert returned_ids.issubset({TEST_DRUG_ID_VEMURAFENIB, TEST_DRUG_ID_OSIMERTINIB})
+        returned_ids = {drug["id"] for drug in result["drugs"] if isinstance(drug, dict)}
+        assert returned_ids == {TEST_DRUG_ID_VEMURAFENIB, TEST_DRUG_ID_OSIMERTINIB}
