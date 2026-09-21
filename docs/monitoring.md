@@ -183,10 +183,14 @@ Three safeguards:
   1, 2, 3, 4, 4, the first-failure timestamp unchanged, and the reminder flag —
   because selecting the right action does not prove the state it produced.
 - **Every write targets the issue this run created.** The number comes from
-  the creation response, and identity is checked before each mutation and after
-  each read-back. Re-resolving the condition each step could hand a
-  concurrently created issue to `apply`, and failing afterwards would not undo
-  edits made to the wrong one.
+  the creation response and from nowhere else — there is deliberately no
+  fallback to a search, since a search can resolve to somebody else's issue,
+  which is the problem the binding exists to prevent. Identity is checked
+  before each mutation and after each read-back. If creation yields no usable
+  number the run stops immediately, writing nothing further and leaving the
+  created issue open for inspection. Re-resolving the condition each step could
+  hand a concurrently created issue to `apply`, and failing afterwards would not
+  undo edits made to the wrong one.
 - **Final read-back is direct.** The canary captures its issue number and
   inspects that issue, because `load_issue` searches only open issues: after a
   close it reports no issue, which is also what it reports when none was ever

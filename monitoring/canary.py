@@ -150,12 +150,21 @@ def run_canary(
         if error:
             failures.append(f"{step.name}: read-back failed: {error}")
             break
-        if number is None:
+        if step.expected_kind is ActionKind.OPEN:
+            # Identity comes from the creation response only. Falling back to a
+            # search would reintroduce the problem the binding exists to
+            # prevent: the search can resolve to somebody else's issue.
             number = (
-                outcome.get("created_issue")
-                if isinstance(outcome, dict)
-                else None
-            ) or (observed.number if observed else None)
+                outcome.get("created_issue") if isinstance(outcome, dict) else None
+            )
+            if number is None:
+                failures.append(
+                    f"{step.name}: the creation response did not yield an issue "
+                    "number, so identity cannot be established. Stopping before "
+                    "any further mutation; the created issue, if one exists, is "
+                    "left open for inspection."
+                )
+                break
         if first_failure_at is None and observed is not None:
             first_failure_at = observed.first_failure_at
 
