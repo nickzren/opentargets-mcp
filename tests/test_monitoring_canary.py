@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pytest
 
 from monitoring import canary, cli
-from monitoring.model import ActionKind, Status
+from monitoring.model import Action, ActionKind, CheckResult, Status
 
 NOW = datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc)
 
@@ -21,12 +21,14 @@ NOW = datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc)
 class FakeGitHub:
     """In-memory `gh`, storing issue bodies so the real parsers round-trip."""
 
-    def __init__(self, *, fail_on=None, corrupt=None):
+    def __init__(self, *, fail_on=None, corrupt=None, after_create=None):
         self.issues = {}
         self.next_number = 101
         self.calls = []
+        self.mutations = []
         self._fail_on = fail_on or {}
         self._corrupt = corrupt
+        self._after_create = after_create
 
     def __call__(self, *args):
         verb = " ".join(args[:2])
@@ -52,13 +54,17 @@ class FakeGitHub:
                 "state": "OPEN",
                 "url": f"https://example.test/{number}",
             }
-            return True, "", ""
+            if self._after_create:
+                self._after_create(self)
+            return True, f"https://example.test/repo/issues/{number}\n", ""
         if verb == "issue edit":
+            self.mutations.append((verb, int(args[2])))
             issue = self.issues[int(args[2])]
             body = args[args.index("--body") + 1]
             issue["body"] = self._corrupt(body) if self._corrupt else body
             return True, "", ""
         if verb == "issue comment":
+            self.mutations.append((verb, int(args[2])))
             self.issues[int(args[2])]["comments"].append(
                 {
                     "author": {"login": "github-actions[bot]"},
@@ -67,6 +73,7 @@ class FakeGitHub:
             )
             return True, "", ""
         if verb == "issue close":
+            self.mutations.append((verb, int(args[2])))
             self.issues[int(args[2])]["state"] = "CLOSED"
             return True, "", ""
         if verb == "issue view":
@@ -297,3 +304,82 @@ def test_workflow_defaults_canary_to_false():
     workflow = pathlib.Path(".github/workflows/monitor.yml").read_text()
     assert "canary:" in workflow
     assert "default: false" in workflow
+
+
+# ---------------------------------------------------------------------------
+# Later writes must target the issue this run created
+# ---------------------------------------------------------------------------
+
+
+def test_a_rival_issue_receives_no_writes(monkeypatch):
+    """A concurrently created match must not be edited, commented or closed."""
+
+    def inject_rival(fake):
+        rival = {
+            "number": 102,
+            "body": cli.MARKER.format(condition="canary"),
+            "createdAt": NOW.isoformat(),
+            "comments": [],
+            "labels": [{"name": cli.LABEL}],
+            "assignees": [],
+            "state": "OPEN",
+            "url": "https://example.test/102",
+        }
+        # Listed first, so a search by condition would resolve to it.
+        fake.issues = {102: rival, **fake.issues}
+        fake._after_create = None
+
+    fake = FakeGitHub(after_create=inject_rival)
+    report = run_against(fake, monkeypatch)
+
+    assert report["ok"] is False
+    assert any("refusing to modify" in f for f in report["failures"]), report["failures"]
+    assert all(number != 102 for _, number in fake.mutations), (
+        f"the rival issue was modified: {fake.mutations}"
+    )
+    assert fake.issues[102]["state"] == "OPEN"
+    assert fake.issues[102]["comments"] == []
+
+
+def test_the_created_number_comes_from_the_creation_response(monkeypatch):
+    fake = FakeGitHub()
+    monkeypatch.setattr(cli, "_gh", fake)
+    action = Action(ActionKind.OPEN, "canary", "first failure", 1)
+    result = CheckResult("canary", Status.FAIL, "failing", "")
+    proposed = cli.apply(action, result, None, NOW, dry_run=False)
+    assert proposed["created_issue"] == 101
+
+
+def test_binding_survives_a_rival_appearing_later(monkeypatch):
+    """Injected after several steps, not just after creation."""
+    state = {"steps": 0}
+
+    def fake_list_hook(fake):
+        pass
+
+    fake = FakeGitHub()
+    original = fake.__call__
+
+    def wrapper(*args):
+        if " ".join(args[:2]) == "issue edit":
+            state["steps"] += 1
+            if state["steps"] == 2 and 102 not in fake.issues:
+                fake.issues = {
+                    102: {
+                        "number": 102,
+                        "body": cli.MARKER.format(condition="canary"),
+                        "createdAt": NOW.isoformat(),
+                        "comments": [],
+                        "labels": [{"name": cli.LABEL}],
+                        "assignees": [],
+                        "state": "OPEN",
+                        "url": "https://example.test/102",
+                    },
+                    **fake.issues,
+                }
+        return original(*args)
+
+    report = run_against(wrapper, monkeypatch)
+    assert report["ok"] is False
+    assert all(number != 102 for _, number in fake.mutations)
+    assert fake.issues[102]["state"] == "OPEN"

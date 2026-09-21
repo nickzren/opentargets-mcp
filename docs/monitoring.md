@@ -182,6 +182,11 @@ Three safeguards:
   step the issue is re-read and its state verified — failure count progressing
   1, 2, 3, 4, 4, the first-failure timestamp unchanged, and the reminder flag —
   because selecting the right action does not prove the state it produced.
+- **Every write targets the issue this run created.** The number comes from
+  the creation response, and identity is checked before each mutation and after
+  each read-back. Re-resolving the condition each step could hand a
+  concurrently created issue to `apply`, and failing afterwards would not undo
+  edits made to the wrong one.
 - **Final read-back is direct.** The canary captures its issue number and
   inspects that issue, because `load_issue` searches only open issues: after a
   close it reports no issue, which is also what it reports when none was ever
