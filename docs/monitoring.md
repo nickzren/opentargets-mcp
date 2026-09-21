@@ -201,5 +201,17 @@ Three safeguards:
   appearing to succeed. The dispatch must select `canary=true, dry_run=false`
   explicitly. Canary mode bypasses normal health reconciliation.
 - **A pre-existing open canary stops the run**, reporting its URL. A previous
-  failed attempt is never adopted or closed automatically; a failed canary is
-  left open for inspection.
+  attempt is never adopted or closed automatically.
+
+### What a run leaves behind
+
+A successful run creates one issue, `[monitoring] canary: canary failing`, and
+leaves **two** comments on it: the marked reminder and the recovery comment
+written on close. Exactly one of those is a reminder, which is what the final
+read-back checks. The issue ends CLOSED, and the `monitoring` label is created
+permanently if it did not already exist.
+
+The guarantee on failure is that **execution stops as soon as a failure is
+detected** — not that the issue is left open. Most failures do leave it open,
+because they occur before the close. But if the close succeeds and the final
+read-back then fails, the run fails with the issue already closed.
