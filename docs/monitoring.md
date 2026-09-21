@@ -156,3 +156,9 @@ its bookkeeping unwritten.
 
 Phase one is dispatch-only and defaults to a dry run. Enabling the daily
 schedule means uncommenting the `schedule` block in the workflow.
+
+A dry run returns before any write. It verifies the isolated PyPI installation,
+the live assertions, the registry comparison, GitHub reads and the proposed
+decisions. GitHub write permissions and the issue lifecycle — creation, label,
+comments, closure — remain unverified until exercised separately, which needs a
+deliberate canary issue rather than a dry run.
