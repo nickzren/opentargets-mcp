@@ -90,6 +90,7 @@ def run_canary(
     load_issue: Callable[[str], tuple[Optional[IssueSnapshot], Optional[str]]],
     apply_action: Callable[..., Any],
     inspect_issue: Callable[[int], Optional[dict]],
+    read_back: Callable[[Optional[int], str], tuple[Optional[IssueSnapshot], Optional[str]]],
     owner: str = "nickzren",
     label: str = "monitoring",
     load_issue_override: Optional[Callable] = None,
@@ -115,10 +116,17 @@ def run_canary(
     first_failure_at: Optional[datetime] = None
 
     for step in canary_steps():
-        issue, error = reader(CONDITION)
+        # Once the number is known every read uses it. Re-searching would be
+        # both inconsistent (a fresh issue can be missing from a listing) and
+        # unbound (it can resolve to somebody else's issue).
+        issue, error = (
+            reader(CONDITION) if number is None else read_back(number, CONDITION)
+        )
         if error:
             failures.append(f"{step.name}: issue lookup failed: {error}")
             break
+        if issue is not None and not issue.is_open:
+            issue = None
 
         # Bind to the issue this run created. Searching by condition again could
         # hand a concurrently created issue to apply, and failing afterwards
@@ -146,14 +154,7 @@ def run_canary(
 
         steps_run.append({"step": step.name, "kind": action.kind.value})
 
-        observed, error = reader(CONDITION)
-        if error:
-            failures.append(f"{step.name}: read-back failed: {error}")
-            break
         if step.expected_kind is ActionKind.OPEN:
-            # Identity comes from the creation response only. Falling back to a
-            # search would reintroduce the problem the binding exists to
-            # prevent: the search can resolve to somebody else's issue.
             number = (
                 outcome.get("created_issue") if isinstance(outcome, dict) else None
             )
@@ -165,6 +166,11 @@ def run_canary(
                     "issue, if one exists, remains open for inspection."
                 )
                 break
+
+        observed, error = read_back(number, CONDITION)
+        if error:
+            failures.append(f"{step.name}: read-back failed: {error}")
+            break
         if first_failure_at is None and observed is not None:
             first_failure_at = observed.first_failure_at
 
@@ -234,13 +240,14 @@ def _verify_step_state(
     problems: list[str] = []
 
     if step.expected_kind is ActionKind.CLOSE:
-        if observed is not None:
-            problems.append(
-                f"{step.name}: issue is still open after a close"
-            )
+        if observed is not None and observed.is_open:
+            problems.append(f"{step.name}: issue is still open after a close")
         return problems
 
     if observed is None:
+        problems.append(f"{step.name}: the issue could not be read after {step.expected_kind.value}")
+        return problems
+    if not observed.is_open:
         problems.append(f"{step.name}: the issue is not open after {step.expected_kind.value}")
         return problems
 
