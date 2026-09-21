@@ -1,0 +1,42 @@
+name: Monitor published package
+
+# Phase one ships dispatch-only, defaulting to a dry run, so the proposed issue
+# changes can be inspected before anything posts. Activating the daily schedule
+# is a deliberate follow-up: uncomment the `schedule` block below.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print proposed issue changes without making any'
+        type: boolean
+        default: true
+  # schedule:
+  #   - cron: '17 6 * * *'  # daily
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Run monitoring checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Scheduled runs post; dispatches honour the input, defaulting to dry.
+          DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${DRY_RUN}" != "false" ]; then
+            args+=(--dry-run)
+          fi
+          python -m monitoring.cli "${args[@]}"
