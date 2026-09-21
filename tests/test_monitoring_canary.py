@@ -21,7 +21,8 @@ NOW = datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc)
 class FakeGitHub:
     """In-memory `gh`, storing issue bodies so the real parsers round-trip."""
 
-    def __init__(self, *, fail_on=None, corrupt=None, after_create=None):
+    def __init__(self, *, fail_on=None, corrupt=None, after_create=None,
+                 create_output=None):
         self.issues = {}
         self.next_number = 101
         self.calls = []
@@ -29,6 +30,7 @@ class FakeGitHub:
         self._fail_on = fail_on or {}
         self._corrupt = corrupt
         self._after_create = after_create
+        self._create_output = create_output
 
     def __call__(self, *args):
         verb = " ".join(args[:2])
@@ -56,6 +58,8 @@ class FakeGitHub:
             }
             if self._after_create:
                 self._after_create(self)
+            if self._create_output is not None:
+                return True, self._create_output, ""
             return True, f"https://example.test/repo/issues/{number}\n", ""
         if verb == "issue edit":
             self.mutations.append((verb, int(args[2])))
@@ -383,3 +387,56 @@ def test_binding_survives_a_rival_appearing_later(monkeypatch):
     assert report["ok"] is False
     assert all(number != 102 for _, number in fake.mutations)
     assert fake.issues[102]["state"] == "OPEN"
+
+
+@pytest.mark.parametrize(
+    "create_output, label",
+    [
+        ("", "blank"),
+        ("\n", "whitespace"),
+        ("Created issue in nickzren/opentargets-mcp", "no number"),
+        ("https://example.test/repo/issues/", "trailing slash"),
+        ("not a url at all", "malformed"),
+    ],
+)
+def test_unusable_creation_output_stops_before_further_writes(
+    create_output, label, monkeypatch
+):
+    """Without a number from creation, identity is unestablished — stop."""
+
+    def inject_rival(fake):
+        fake.issues = {
+            102: {
+                "number": 102,
+                "body": cli.MARKER.format(condition="canary"),
+                "createdAt": NOW.isoformat(),
+                "comments": [],
+                "labels": [{"name": cli.LABEL}],
+                "assignees": [],
+                "state": "OPEN",
+                "url": "https://example.test/102",
+            },
+            **fake.issues,
+        }
+        fake._after_create = None
+
+    fake = FakeGitHub(create_output=create_output, after_create=inject_rival)
+    report = run_against(fake, monkeypatch)
+
+    assert report["ok"] is False, label
+    assert any("identity cannot be established" in f for f in report["failures"]), (
+        report["failures"]
+    )
+    assert fake.mutations == [], f"{label}: wrote after losing identity: {fake.mutations}"
+    assert fake.issues[102]["state"] == "OPEN"
+    assert fake.issues[102]["comments"] == []
+    # The issue this run created is left open for inspection.
+    assert fake.issues[101]["state"] == "OPEN"
+
+
+def test_unusable_creation_output_without_a_rival_also_stops(monkeypatch):
+    fake = FakeGitHub(create_output="")
+    report = run_against(fake, monkeypatch)
+    assert report["ok"] is False
+    assert fake.mutations == []
+    assert fake.issues[101]["state"] == "OPEN"
