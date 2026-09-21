@@ -85,9 +85,25 @@ jobs:
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
+      # Pinned rather than `releases/latest`: a mutable download makes runs
+      # unreproducible, which is how an unpinned linter broke CI earlier.
       - name: Install mcp-publisher
+        env:
+          PUBLISHER_VERSION: 1.8.1
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          set -euo pipefail
+          base="https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}"
+          asset="mcp-publisher_linux_amd64.tar.gz"   # assets are unversioned
+          curl -fsSL -o "$asset" "${base}/${asset}"
+          curl -fsSL -o checksums.txt "${base}/registry_${PUBLISHER_VERSION}_checksums.txt"
+          grep " ${asset}$" checksums.txt | sha256sum -c -
+          tar xzf "$asset" mcp-publisher
+          ./mcp-publisher --version
+
+      # Validate before authenticating or publishing, so a malformed manifest
+      # fails fast rather than part-way through a publish.
+      - name: Validate server.json
+        run: ./mcp-publisher validate
 
       - name: Authenticate to MCP Registry
         run: ./mcp-publisher login github-oidc
