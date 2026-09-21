@@ -1,4 +1,5 @@
 import aiohttp
+from fastmcp.exceptions import ToolError
 import pytest
 
 from opentargets_mcp.exceptions import UpstreamQueryError, ValidationError
@@ -326,11 +327,14 @@ async def test_tool_wrapper_rejects_page_size_above_global_max(monkeypatch):
     monkeypatch.setattr(server_module, "get_client", lambda: object())
 
     wrapper = server_module._make_tool_wrapper(fake_tool)
+    # The wrapper is the MCP boundary: bad input surfaces as ToolError so the
+    # message survives mask_error_details, with the ValidationError as cause.
     with pytest.raises(
-        ValidationError,
+        ToolError,
         match=f"page_size must be <= {server_module.MAX_PAGE_SIZE}.",
-    ):
+    ) as exc_info:
         await wrapper(page_size=server_module.MAX_PAGE_SIZE + 1)
+    assert isinstance(exc_info.value.__cause__, ValidationError)
 
 
 def test_server_main_rejects_port_above_tcp_max(monkeypatch):
@@ -402,8 +406,11 @@ async def test_tool_wrapper_rejects_bool_page_size(monkeypatch):
     monkeypatch.setattr(server_module, "get_client", lambda: object())
 
     wrapper = server_module._make_tool_wrapper(fake_tool)
-    with pytest.raises(ValidationError, match="page_size must be an integer >= 1."):
+    with pytest.raises(
+        ToolError, match="page_size must be an integer >= 1."
+    ) as exc_info:
         await wrapper(page_size=True)
+    assert isinstance(exc_info.value.__cause__, ValidationError)
 
 
 def test_validate_required_int_rejects_bool():
@@ -434,11 +441,12 @@ def test_promote_clinical_candidates_preserves_legacy_known_drugs_shape():
         }
     }
 
-    promote_clinical_candidates(parent, limit=1)
+    promote_clinical_candidates(parent, page_size=1)
 
     assert "drugAndClinicalCandidates" not in parent
     known_drugs = parent["knownDrugs"]
-    assert known_drugs["count"] == 1
+    # count is the upstream total, not the page length.
+    assert known_drugs["count"] == 2
     assert len(known_drugs["rows"]) == 1
     row = known_drugs["rows"][0]
     assert row["phase"] == 3

@@ -314,6 +314,10 @@ class DrugAssociationsApi:
                             name
                             drugType
                             maximumClinicalStage
+                            drugWarnings {
+                                warningType
+                                toxicityClass
+                            }
                         }
                     }
                 }

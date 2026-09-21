@@ -3,6 +3,7 @@
 Defines API methods and MCP tools related to 'Disease' entities in Open Targets.
 """
 from typing import Any, Dict, List, Optional
+from ..exceptions import ValidationError
 from ..queries import OpenTargetsClient
 from ..utils import (
     build_literature_variables,
@@ -164,15 +165,18 @@ class DiseaseApi:
 
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
-        - `efo_id` (`str`): Disease identifier such as `"EFO_0000583"`.
+        - `efo_id` (`str`): Disease identifier such as `"MONDO_0005105"`.
         - `size` (`int`): Number of drug rows to return (default 10).
-        - `cursor` (`Optional[str]`): Pagination cursor from a previous call.
-        - `free_text_query` (`Optional[str]`): Filter results by a free-text query.
+        - `cursor` (`Optional[str]`): Not supported; raises `ValidationError` if set.
+        - `free_text_query` (`Optional[str]`): Not supported; raises `ValidationError` if set.
 
         **Returns**
         - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "knownDrugs": {"count": int, "rows": [{"drug": {...}, "phase": int, "status": str, ...}]}}}`.
+          `count` is the upstream total, which may exceed `len(rows)`.
 
         **Errors**
+        - `ValidationError` if `cursor` or `free_text_query` is supplied: the
+          Open Targets API exposes no paging or filtering arguments on this field.
         - GraphQL/network exceptions propagate via the client.
 
         **Example**
@@ -198,6 +202,10 @@ class DiseaseApi:
                             name
                             drugType
                             maximumClinicalStage
+                            drugWarnings {
+                                warningType
+                                toxicityClass
+                            }
                         }
                         clinicalReports {
                             id
@@ -212,12 +220,29 @@ class DiseaseApi:
             }
         }
         """
+        # Disease.drugAndClinicalCandidates accepts no arguments upstream, so
+        # these cannot be honoured. Reject rather than ignore them silently.
+        unsupported = [
+            name
+            for name, value in (("cursor", cursor), ("free_text_query", free_text_query))
+            if value is not None
+        ]
+        if unsupported:
+            raise ValidationError(
+                "get_disease_known_drugs does not support "
+                + ", ".join(unsupported)
+                + ": the Open Targets API exposes no paging or filtering arguments "
+                "on this field. Use `size` to limit rows."
+            )
+
         validated_size = validate_required_int(size, "size")
         variables = {
             "efoId": efo_id,
         }
         result = await client._query(graphql_query, filter_none_values(variables))
-        promote_clinical_candidates(result.get("disease"), limit=validated_size)
+        promote_clinical_candidates(
+            result.get("disease"), page_index=0, page_size=validated_size
+        )
         return result
 
     async def get_disease_ontology(

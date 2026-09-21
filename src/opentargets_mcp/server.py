@@ -20,7 +20,7 @@ from starlette.responses import JSONResponse, Response
 import mcp.types as mcp_types
 
 from . import __version__
-from .exceptions import UpstreamQueryError
+from .exceptions import UpstreamQueryError, ValidationError
 from .queries import OpenTargetsClient
 from .settings import ServerSettings
 from .tools.disease import DiseaseApi
@@ -170,6 +170,9 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
             # Actionable upstream detail (e.g. a field renamed by a data
             # release) must reach the caller despite mask_error_details.
             raise ToolError(f"Open Targets API rejected the query: {exc}") from exc
+        except ValidationError as exc:
+            # Bad input is the caller's to correct, so it needs to say what.
+            raise ToolError(str(exc)) from exc
 
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
