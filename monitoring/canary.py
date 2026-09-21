@@ -5,9 +5,13 @@ assignment, reminder delivery and closure are never proven. The canary drives
 the real `decide`/`apply` code through a scripted lifecycle against a clearly
 synthetic condition, then inspects the resulting issue directly.
 
-Direct inspection matters: `load_issue` lists only open issues, so its returning
-None after a close is indistinguishable from "never existed" or "lookup failed".
-Proving closure requires reading back the specific issue number.
+Direct inspection matters: `load_issue` searches only open issues, so after a
+close it reports no issue — which is also what it reports when none was ever
+created. Proving closure requires reading back the specific issue number.
+
+Selecting the right action does not prove the state it produced, so each step
+declares the state that must be observable afterwards, and a write that reported
+an error stops the run before any further mutation.
 """
 
 from __future__ import annotations
@@ -29,6 +33,10 @@ class Step:
     result: CheckResult
     offset: timedelta
     expected_kind: ActionKind
+    # Choosing an action does not prove the state it produced, so each step
+    # declares the state that must be observable afterwards.
+    expected_failures: Optional[int] = None
+    expected_reminded: bool = False
 
 
 def _result(status: Status, summary: str) -> CheckResult:
@@ -39,17 +47,20 @@ def canary_steps() -> list[Step]:
     """The lifecycle, with the clock advanced rather than waited out."""
     return [
         Step("open", _result(Status.FAIL, "canary failing"),
-             timedelta(0), ActionKind.OPEN),
+             timedelta(0), ActionKind.OPEN, expected_failures=1),
         Step("update", _result(Status.FAIL, "canary still failing"),
-             timedelta(minutes=1), ActionKind.UPDATE),
+             timedelta(minutes=1), ActionKind.UPDATE, expected_failures=2),
         Step("remind", _result(Status.FAIL, "canary unacknowledged"),
-             OVERDUE, ActionKind.REMIND),
+             OVERDUE, ActionKind.REMIND,
+             expected_failures=3, expected_reminded=True),
         # Past the window again: the reminder must not repeat.
         Step("no-second-reminder", _result(Status.FAIL, "canary still unacknowledged"),
-             OVERDUE + timedelta(hours=1), ActionKind.UPDATE),
-        # No verdict: the issue must stay open and keep its failure record.
+             OVERDUE + timedelta(hours=1), ActionKind.UPDATE,
+             expected_failures=4, expected_reminded=True),
+        # No verdict: the issue stays open and the failure record is not reset.
         Step("unknown-holds", _result(Status.UNKNOWN, "canary verdict unavailable"),
-             OVERDUE + timedelta(hours=2), ActionKind.UPDATE),
+             OVERDUE + timedelta(hours=2), ActionKind.UPDATE,
+             expected_failures=4, expected_reminded=True),
         Step("recover", _result(Status.PASS, "canary recovered"),
              OVERDUE + timedelta(hours=3), ActionKind.CLOSE),
     ]
@@ -101,6 +112,8 @@ def run_canary(
         }
 
     number: Optional[int] = None
+    first_failure_at: Optional[datetime] = None
+
     for step in canary_steps():
         issue, error = reader(CONDITION)
         if error:
@@ -115,12 +128,28 @@ def run_canary(
             )
             break
 
-        apply_action(action, step.result, issue, now + step.offset)
+        outcome = apply_action(action, step.result, issue, now + step.offset)
+        applied_problem = _applied_ok(step.name, outcome)
+        if applied_problem:
+            # Stop before any further mutation: continuing past a failed write
+            # would let the run close an issue it never successfully updated.
+            failures.append(applied_problem)
+            break
+
         steps_run.append({"step": step.name, "kind": action.kind.value})
 
-        if number is None:
-            seen, _ = reader(CONDITION)
-            number = seen.number if seen else None
+        observed, error = reader(CONDITION)
+        if error:
+            failures.append(f"{step.name}: read-back failed: {error}")
+            break
+        if number is None and observed is not None:
+            number = observed.number
+            first_failure_at = observed.first_failure_at
+
+        state_problems = _verify_step_state(step, observed, first_failure_at)
+        if state_problems:
+            failures.extend(state_problems)
+            break
 
     if failures:
         return {"ok": False, "failures": failures, "steps": steps_run, "issue": number}
@@ -139,6 +168,55 @@ def run_canary(
         "steps": steps_run,
         "issue": number,
     }
+
+
+def _applied_ok(step_name: str, outcome: Any) -> Optional[str]:
+    """A write that reported an error is not a write that happened."""
+    if not isinstance(outcome, dict):
+        return f"{step_name}: apply returned {type(outcome).__name__}, not a result"
+    if outcome.get("applied") is not True:
+        errors = outcome.get("errors") or ["apply did not report success"]
+        return f"{step_name}: write failed: {'; '.join(errors)}"
+    return None
+
+
+def _verify_step_state(
+    step: Step,
+    observed: Optional[IssueSnapshot],
+    first_failure_at: Optional[datetime],
+) -> list[str]:
+    """Read the issue back and check the state the step should have produced."""
+    problems: list[str] = []
+
+    if step.expected_kind is ActionKind.CLOSE:
+        if observed is not None:
+            problems.append(
+                f"{step.name}: issue is still open after a close"
+            )
+        return problems
+
+    if observed is None:
+        problems.append(f"{step.name}: the issue is not open after {step.expected_kind.value}")
+        return problems
+
+    if step.expected_failures is not None and (
+        observed.consecutive_failures != step.expected_failures
+    ):
+        problems.append(
+            f"{step.name}: failure count is {observed.consecutive_failures}, "
+            f"expected {step.expected_failures}"
+        )
+    if observed.reminded is not step.expected_reminded:
+        problems.append(
+            f"{step.name}: reminded is {observed.reminded}, "
+            f"expected {step.expected_reminded}"
+        )
+    if first_failure_at is not None and observed.first_failure_at != first_failure_at:
+        problems.append(
+            f"{step.name}: first-failure time changed from {first_failure_at} "
+            f"to {observed.first_failure_at}"
+        )
+    return problems
 
 
 def _verify_final_state(issue: Optional[dict], owner: str, label: str) -> list[str]:
