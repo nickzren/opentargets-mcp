@@ -83,11 +83,17 @@ def _project_field_tree(value: Any, spec: dict[str, Any]) -> Any:
 def promote_clinical_candidates(
     parent: Any,
     *,
-    limit: int,
+    page_index: int = 0,
+    page_size: int,
     source_key: str = "drugAndClinicalCandidates",
     target_key: str = "knownDrugs",
 ) -> Any:
-    """Move clinical candidates to the legacy known-drugs shape."""
+    """Move clinical candidates to the legacy known-drugs shape.
+
+    Upstream returns every candidate and accepts no paging arguments, so the
+    page is sliced here. `count` stays the upstream total: overwriting it with
+    the page length makes a partial answer look complete.
+    """
     if not isinstance(parent, dict):
         return parent
 
@@ -95,11 +101,12 @@ def promote_clinical_candidates(
     if isinstance(candidates, dict):
         rows = candidates.get("rows")
         if isinstance(rows, list):
-            normalized_rows = [
-                normalize_clinical_candidate(row) for row in rows[:limit]
+            candidates.setdefault("count", len(rows))
+            start = page_index * page_size
+            candidates["rows"] = [
+                normalize_clinical_candidate(row)
+                for row in rows[start : start + page_size]
             ]
-            candidates["rows"] = normalized_rows
-            candidates["count"] = len(normalized_rows)
         parent[target_key] = candidates
     return parent
 
@@ -217,7 +224,9 @@ def add_legacy_drug_fields(drug: Any) -> Any:
     drug.setdefault("maximumClinicalTrialPhase", phase)
     drug.setdefault("isApproved", stage == "APPROVAL" or phase >= 4)
 
-    warnings = drug.get("drugWarnings") or []
+    # Only a list is evidence. Absent means the query never selected the field
+    # and null means upstream had nothing to say; neither justifies `False`.
+    warnings = drug.get("drugWarnings")
     if isinstance(warnings, list):
         warning_text = " ".join(
             " ".join(str(item.get(key, "")) for key in ("warningType", "toxicityClass"))
@@ -229,9 +238,6 @@ def add_legacy_drug_fields(drug: Any) -> Any:
             "blackBoxWarning",
             "black box" in warning_text or "blackbox" in warning_text,
         )
-    else:
-        drug.setdefault("hasBeenWithdrawn", False)
-        drug.setdefault("blackBoxWarning", False)
 
     return drug
 

@@ -94,11 +94,12 @@ class TargetAssociationsApi:
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `ensembl_id` (`str`): Target identifier.
         - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
-        - `page_index` (`int`): Reserved pagination parameter (API returns all known drugs).
-        - `page_size` (`int`): Reserved parameter for interface consistency.
+        - `page_index` (`int`): Zero-based page. Upstream returns every candidate, so
+          the page is sliced client-side; `count` remains the upstream total.
+        - `page_size` (`int`): Rows per page.
 
         **Returns**
-        - `Dict[str, Any]`: `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "mechanismOfAction": str, "disease": {...}, "phase": int, "status": str, "urls": [...]}, ...]}}}`.
+        - `Dict[str, Any]` (`count` is the upstream total, which may exceed `len(rows)`): `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "mechanismOfAction": str, "disease": {...}, "phase": int, "status": str, "urls": [...]}, ...]}}}`.
 
         **Errors**
         - GraphQL/network exceptions are raised by the client.
@@ -124,6 +125,10 @@ class TargetAssociationsApi:
                             drugType
                             maximumClinicalStage
                             description
+                            drugWarnings {
+                                warningType
+                                toxicityClass
+                            }
                         }
                         diseases {
                             diseaseFromSource
@@ -146,7 +151,9 @@ class TargetAssociationsApi:
         }
         """
         result = await client._query(graphql_query, {"ensemblId": ensembl_id})
-        promote_clinical_candidates(result.get("target"), limit=page_size)
+        promote_clinical_candidates(
+            result.get("target"), page_index=page_index, page_size=page_size
+        )
         return select_fields(result, fields)
 
     async def get_target_literature_occurrences(
