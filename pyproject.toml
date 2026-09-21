@@ -52,7 +52,11 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "black",
-    "ruff",
+    # Pinned: uv.lock is gitignored, so CI resolves dev tools fresh on every
+    # run. An unpinned ruff silently adopted new default rules between the
+    # last push to main (2026-05-15) and this one, failing CI on pre-existing
+    # code. The minor bound is deliberate: ruff adds rules in minor releases.
+    "ruff>=0.11.13,<0.12",
 ]
 examples = [
     "openai",
