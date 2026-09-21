@@ -58,7 +58,7 @@ async def generate_target_validation_profile(target_symbol: str):
                 {
                     "name": drug.get("drug", {}).get("name"),
                     "phase": drug.get("phase"),
-                    "mechanism": drug.get("mechanismOfAction"),
+                    "status": drug.get("status"),
                     "disease": drug.get("disease", {}).get("name")
                 } for drug in known_drugs
             ],

@@ -51,7 +51,7 @@ class EvidenceApi:
         ```python
         evidence_api = EvidenceApi()
         evidences = await evidence_api.get_target_disease_evidence(
-            client, "ENSG00000157764", "EFO_0003884", datasource_ids=["eva"], size=5
+            client, "ENSG00000157764", "MONDO_0005300", datasource_ids=["eva"], size=5
         )
         print(len(evidences["target"]["evidences"]["rows"]))
         ```
@@ -147,7 +147,7 @@ class EvidenceApi:
         ```python
         evidence_api = EvidenceApi()
         biomarker_rows = await evidence_api.get_target_disease_biomarkers(
-            client, "ENSG00000157764", "EFO_0003884", size=5
+            client, "ENSG00000157764", "MONDO_0005300", size=5
         )
         print(biomarker_rows["target"]["evidences"]["rows"][0].get("biomarkerName"))
         ```

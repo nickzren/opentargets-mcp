@@ -24,7 +24,7 @@ async def prioritize_target_from_genetics(disease_name: str):
 
     try:
         # 1. Use map_ids and iterate through hits to find a valid disease ID
-        print(f"\nStep 1: Finding EFO ID for '{disease_name}' using map_ids...")
+        print(f"\nStep 1: Finding disease ID for '{disease_name}' using map_ids...")
         map_results = await meta_api.map_ids(client, [disease_name], entity_names=["disease"])
         
         mappings = map_results.get("mapIds", {}).get("mappings", [])

@@ -240,7 +240,7 @@ class MetaApi:
 
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
-        - `efo_ids` (`List[str]`): List of EFO IDs (e.g., `["EFO_0000270", "EFO_0000583"]`).
+        - `efo_ids` (`List[str]`): Disease IDs, mostly MONDO since EFO 3.88 (e.g., `["MONDO_0004979", "MONDO_0005105"]`).
 
         **Returns**
         - `Dict[str, Any]`: `{"diseases": [{"id": str, "name": str, "description": str, ...}, ...]}`.

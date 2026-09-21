@@ -219,7 +219,7 @@ The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biom
 
 The server wraps **68** operations from the [Open Targets Platform](https://platform-docs.opentargets.org/): **65 curated tools** plus **3 advanced GraphQL tools**. Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
 
-Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `EFO_...`, `CHEMBL...`) or a human-readable name/symbol. When a name is provided, the server automatically resolves it to the best matching Open Targets ID.
+Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `MONDO_...`, `CHEMBL...`) or a human-readable name/symbol. Disease identifiers are largely MONDO since the 26.06 alignment to EFO 3.88; `EFO_...` IDs that were replaced no longer resolve. Colon notation (`MONDO:0004979`) is accepted and normalised. When a name is provided, the server automatically resolves it to the best matching Open Targets ID.
 Many core tools accept an optional `fields` list (dot-paths) to filter the response payload.
 `search_entities` also returns `search.triples` for compact `{id, entity, name}` consumption.
 For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when no curated tool fits.
@@ -265,6 +265,17 @@ responses differ from earlier versions of this server:
 - **Drug `synonyms` and `tradeNames`** are objects rather than plain strings.
   Each entry is `{label, source}`, affecting `get_drug_info`,
   `get_drug_cross_references` and `get_drugs_batch`.
+- **Disease identifiers** largely moved from EFO to MONDO with the alignment to
+  EFO 3.88. Replaced `EFO_...` IDs no longer resolve; `efo_id` parameters keep
+  their name but accept any supported disease ontology ID, in either colon or
+  underscore notation.
+- **`get_target_known_drugs`** honours `page_index`, and `knownDrugs.count` is the
+  upstream total rather than the page length. Rows no longer carry
+  `mechanismOfAction`; use `get_drug_info` for a drug's mechanisms.
+- **`get_disease_known_drugs`** rejects `cursor` and `free_text_query`: the API
+  exposes no paging or filtering on that field.
+- **`get_target_subcellular_locations`** returns `targetModifier`, naming the
+  protein form a location applies to.
 - **When the API rejects a query**, the tool error now carries the upstream
   GraphQL message instead of a generic failure, and a `200` response containing
   GraphQL errors raises rather than returning partial data. The raw
