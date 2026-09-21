@@ -1,12 +1,14 @@
 # Monitoring the published package
 
-Why this exists: between February and September 2026 the package published on
-PyPI was broken against the live Open Targets API, while `main` was green. The
-fixes existed from 2026-05-04 and were not released for about four and a half
-months. Separately, the MCP registry advertised 0.2.0 for a year. Neither
-condition was visible to anything that ran in CI, because CI tests `main`.
+Why this exists: issue #4 reported that the published 0.5.0 failed against Open
+Targets 26.06. Fixes for those queries had been on `main` since 2026-05-04 and
+were not released for about four and a half months. The exact date the published
+package began failing was never established. Separately, the MCP registry
+advertised 0.2.0 from 2025-09-22 until 2026-09-21.
 
-Green tests on `main` say nothing about whether the published package works.
+CI runs only on push and pull request, and it tests `main`. Green tests on
+`main` say nothing about whether the published package works — that is the gap
+this closes, without any claim about how long a given break went unnoticed.
 
 ## Principle
 
@@ -37,10 +39,20 @@ published package.
 Run against the package installed from PyPI into an isolated environment:
 
 - `search_entities("BRCA1")` top hit is `ENSG00000012048`
-- `get_drug_info("CHEMBL1201827").blackBoxWarning` is `True` (panitumumab)
-- `get_target_known_drugs("ENSG00000146648")` reports a `count` above the page size
+- `get_drug_info` reports panitumumab's `blackBoxWarning` as `True`
+- `get_target_known_drugs` reports it as `True` too — the path that actually
+  regressed, while `get_drug_info` stayed correct throughout
+- `get_target_known_drugs` reports a `count` above the page size
 
-A partial run — some assertions never executed — is UNKNOWN, not PASS.
+Assertions run through an MCP client, the way a consumer uses the server, not
+against the Python API directly. Each is wrapped individually, so a tool error
+is recorded as a failed assertion rather than aborting the run: an aborted probe
+would otherwise become UNKNOWN and raise no alert, which is precisely the
+failure this monitor exists to catch.
+
+A run where nothing failed but some assertions never executed is UNKNOWN. A run
+with an observed failure is FAIL even if later assertions never ran — a known
+failure must not be hidden by subsequent unavailability.
 
 ## Settled operational values
 
@@ -93,7 +105,18 @@ backup coverage is not. Updating a durable record does not establish that anyone
 saw it. This is an organisational limit, not one a workflow can close.
 
 The grace period makes divergence alert-eligible; it cannot prevent divergence
-persisting.
+persisting. Within the grace window the result is UNKNOWN rather than PASS:
+suppressing a new alert must not assert recovery, or an unrelated release would
+close an issue tracking a long-standing divergence.
+
+Divergence compares both the registry manifest version and the PyPI package it
+references. A listing labelled 0.6.0 that points at PyPI 0.2.0 still sends users
+to 0.2.0.
+
+GitHub bookkeeping is verified rather than assumed. A failed issue lookup is
+reported as such and suppresses action for that condition, because treating it
+as "no issue exists" would open a duplicate every run; failed writes are
+reported and make the run exit non-zero.
 
 ## Layout
 
