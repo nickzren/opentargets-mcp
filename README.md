@@ -249,6 +249,27 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
 - **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
 - **Advanced GraphQL (3 tools)** — `graphql_schema`, `graphql_query`, `graphql_batch_query`.
 
+### Response changes for Open Targets 26.06
+
+Release 26.06 changed several upstream shapes. Tools were updated to match, so
+responses differ from earlier versions of this server:
+
+- **`get_target_expression`** now returns `target.baselineExpression`, a
+  paginated `{count, rows}` connection, instead of `target.expressions`. Rows
+  are per-datasource quantitative distributions (`median`, `min`, `max`, `q1`,
+  `q3`, `specificity_score`, `distribution_score`) keyed on `tissueBiosample` /
+  `celltypeBiosample`, and no longer carry `tissue` / `rna` / `protein`. The
+  tool takes `page_index` (default `0`) and `page_size` (default `25`); a single
+  target can have well over a thousand rows. `fields` keeps its position as the
+  first optional argument.
+- **Drug `synonyms` and `tradeNames`** are objects rather than plain strings.
+  Each entry is `{label, source}`, affecting `get_drug_info`,
+  `get_drug_cross_references` and `get_drugs_batch`.
+- **When the API rejects a query**, the tool error now carries the upstream
+  GraphQL message instead of a generic failure, and a `200` response containing
+  GraphQL errors raises rather than returning partial data. The raw
+  `graphql_query` tool still reports partial data with a `warning` status.
+
 Each grouping matches the data domains described in the Open Targets docs (targets, diseases, drugs, evidence, variants, and studies). For high-volume workloads, respect the platform's throttling guidance from the Open Targets API FAQ and cache downstream where possible.
 
 ## Development

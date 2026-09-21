@@ -644,6 +644,30 @@ async def test_studies_by_disease_supports_fields_projection():
 
 
 @pytest.mark.asyncio
+async def test_target_expression_keeps_fields_as_third_positional_argument():
+    """Pagination must not shift `fields` out of its published position."""
+    captured = {}
+
+    class _FakeClient:
+        async def _query(self, _query, variables=None):
+            captured.update(variables or {})
+            return {
+                "target": {
+                    "id": "ENSG00000157764",
+                    "baselineExpression": {"count": 1, "rows": [{"median": 1.0}]},
+                }
+            }
+
+    api = TargetApi()
+    result = await api.get_target_expression(
+        _FakeClient(), "ENSG00000157764", ["target.id"]
+    )
+
+    assert captured["pageIndex"] == 0
+    assert result == {"target": {"id": "ENSG00000157764"}}
+
+
+@pytest.mark.asyncio
 async def test_target_expression_supports_fields_projection():
     class _FakeClient:
         async def _query(self, *_args, **_kwargs):
