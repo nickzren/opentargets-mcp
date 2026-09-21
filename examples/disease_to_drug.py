@@ -24,7 +24,7 @@ async def find_drugs_for_disease(disease_name: str):
     print(f"--- Starting workflow for disease: {disease_name} ---")
 
     try:
-        # 1. Find the disease ID (EFO ID) using the search tool
+        # 1. Find the disease ID using the search tool
         print(f"\nStep 1: Searching for disease '{disease_name}' to get its disease ID...")
         search_results = await search_api.search_entities(client, disease_name, entity_names=["disease"], page_size=1)
         disease_info = search_results.get("search", {}).get("hits", [])
@@ -35,7 +35,7 @@ async def find_drugs_for_disease(disease_name: str):
 
         disease_id = disease_info[0]["id"]
         disease_display_name = disease_info[0]["name"]
-        print(f"Found: '{disease_display_name}' with EFO ID: {disease_id}")
+        print(f"Found: '{disease_display_name}' with disease ID: {disease_id}")
 
         # 2. Find the top 5 targets associated with the disease
         print(f"\nStep 2: Finding top 5 associated targets for '{disease_display_name}'...")

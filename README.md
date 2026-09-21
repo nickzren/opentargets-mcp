@@ -64,7 +64,7 @@ Then restart Claude Desktop to start using the Open Targets tools.
 ### Core Capabilities
 
 - **Target Analysis**: Search genes/proteins by Ensembl ID or symbol. Access expression data, genetic constraints, pathways, protein interactions, safety profiles, and mouse phenotypes
-- **Disease Analysis**: Query diseases by EFO ID. Find associated targets, phenotypes (HPO), and research projects
+- **Disease Analysis**: Query diseases by ontology ID (mostly MONDO). Find associated targets, phenotypes (HPO), and research projects
 - **Drug Discovery**: Search drugs by ChEMBL ID. Access safety data, adverse events, indications, and mechanism of action
 - **Evidence Mining**: Explore target-disease associations with scored evidence from multiple sources
 - **Variant Analysis**: Query genetic variants, GWAS credible sets, and pharmacogenomics data

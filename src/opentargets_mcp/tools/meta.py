@@ -232,7 +232,7 @@ class MetaApi:
         **When to use**
         - Efficiently fetch data for a list of known disease IDs
         - Batch operations when exploring multiple conditions
-        - Reduce API calls when you have multiple EFO IDs
+        - Reduce API calls when you have multiple disease IDs
 
         **When not to use**
         - Searching for diseases by name (use `search_entities`)
