@@ -46,6 +46,9 @@ RETRY_DELAY_SECONDS = 420
 
 MARKER = "<!-- monitoring-condition: {condition} -->"
 REMINDED_MARKER = "<!-- reminded -->"
+# Carried in the reminder comment itself. The comment is the delivery, so it is
+# the durable evidence; the body marker is a convenience that may fail to write.
+REMINDER_COMMENT_MARKER = "<!-- monitoring-reminder: {condition} -->"
 
 # The probe drives the server through MCP, the way a client does, and wraps each
 # assertion so a tool error is recorded as a failed assertion rather than
@@ -137,17 +140,40 @@ asyncio.run(main())
 '''
 
 
+def _as_text(stream) -> str:
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode(errors="replace")
+    return str(stream)
+
+
 def _tail(stream, limit: int = 400) -> str:
     """Last bytes of a stream as text, whatever type it arrived as.
 
     Guarding the type matters: a crash here would replace the real setup
     failure with an AttributeError, hiding the reason the check has no verdict.
     """
-    if stream is None:
-        return ""
-    if isinstance(stream, bytes):
-        stream = stream.decode(errors="replace")
-    return str(stream)[-limit:]
+    return _as_text(stream)[-limit:]
+
+
+def _parse_observations(stdout) -> tuple[list[Observation], int]:
+    """Parse streamed records one at a time.
+
+    Per-record parsing is deliberate: an all-or-nothing parse would let a
+    truncated trailing line erase every valid failure recorded before it.
+    """
+    marker = "__OBSERVATION__"
+    observations: list[Observation] = []
+    malformed = 0
+    for line in _as_text(stdout).splitlines():
+        if not line.startswith(marker):
+            continue
+        try:
+            observations.append(Observation(**json.loads(line[len(marker):])))
+        except Exception:  # noqa: BLE001 - counted, and never fatal
+            malformed += 1
+    return observations, malformed
 
 
 def _json(url: str):
@@ -227,29 +253,38 @@ def run_package_probe(
         probe.write_text(
             PROBE_TEMPLATE.replace("__NAMES__", json.dumps(list(EXPECTED_ASSERTIONS)))
         )
-        done = subprocess.run(
-            [str(venv / "bin" / "python"), str(probe)],
-            capture_output=True,
-            text=True,
-            timeout=600,
+        timed_out = False
+        try:
+            done = subprocess.run(
+                [str(venv / "bin" / "python"), str(probe)],
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+            stdout, stderr, returncode = done.stdout, done.stderr, done.returncode
+        except subprocess.TimeoutExpired as exc:
+            # The exception carries what the child had already written. Losing
+            # it would discard failures the probe genuinely observed.
+            timed_out = True
+            stdout, stderr, returncode = exc.stdout, exc.stderr, None
+
+        observations, malformed = _parse_observations(stdout)
+        note = (
+            "probe timed out"
+            if timed_out
+            else (None if returncode == 0 else f"probe exited {returncode}")
         )
-        marker = "__OBSERVATION__"
-        observations = [
-            Observation(**json.loads(line[len(marker):]))
-            for line in (done.stdout or "").splitlines()
-            if line.startswith(marker)
-        ]
+        if malformed:
+            note = f"{note or 'probe completed'}; {malformed} unparsable record(s)"
+
         if not observations:
             return None, (
-                f"probe reported nothing (exit {done.returncode}): "
-                f"{_tail(done.stderr)}"
+                f"{note or 'probe reported nothing'}: {_tail(stderr)}"
             )
         # Partial output is kept deliberately: whatever was observed before an
         # interruption is evidence, and a failure among it is a verdict.
         return observations, (
-            None
-            if done.returncode == 0
-            else f"probe exited {done.returncode}: {_tail(done.stderr)}"
+            None if note is None else f"{note}: {_tail(stderr)}"
         )
     except Exception as exc:  # noqa: BLE001 - reason is reported, not swallowed
         return None, f"probe could not run: {type(exc).__name__}: {exc}"
@@ -307,9 +342,20 @@ def load_issue(condition: str) -> tuple[Optional[IssueSnapshot], Optional[str]]:
         body = item["body"]
         first = _read_marker(body, "first-failure", item["createdAt"])
         comments = item.get("comments") or []
-        acknowledged = any(
-            (c.get("author") or {}).get("login") != "github-actions" for c in comments
-        ) or any(lab.get("name") == "acknowledged" for lab in item.get("labels", []))
+
+        def _is_bot(comment):
+            login = ((comment.get("author") or {}).get("login") or "").lower()
+            return login.startswith("github-actions")
+
+        acknowledged = any(not _is_bot(c) for c in comments) or any(
+            lab.get("name") == "acknowledged" for lab in item.get("labels", [])
+        )
+        # Delivery evidence lives in the comment, so a failed body edit cannot
+        # cause a second reminder.
+        comment_marker = REMINDER_COMMENT_MARKER.format(condition=condition)
+        reminded = REMINDED_MARKER in body or any(
+            comment_marker in (c.get("body") or "") for c in comments
+        )
         return (
             IssueSnapshot(
                 number=item["number"],
@@ -317,7 +363,7 @@ def load_issue(condition: str) -> tuple[Optional[IssueSnapshot], Optional[str]]:
                 first_failure_at=datetime.fromisoformat(first.replace("Z", "+00:00")),
                 consecutive_failures=int(_read_marker(body, "failures", "1")),
                 acknowledged=acknowledged,
-                reminded=REMINDED_MARKER in body,
+                reminded=reminded,
             ),
             None,
         )
@@ -419,7 +465,10 @@ def apply(
         if action.kind is ActionKind.REMIND:
             ok, _, err = _gh(
                 "issue", "comment", number, "--repo", REPO,
-                "--body", f"@{OWNER} still unacknowledged — {action.reason}.",
+                "--body", (
+                    REMINDER_COMMENT_MARKER.format(condition=action.condition)
+                    + f"\n@{OWNER} still unacknowledged — {action.reason}."
+                ),
             )
             if ok:
                 delivered = True
@@ -432,7 +481,8 @@ def apply(
             errors.append(
                 "issue edit failed: " + err
                 + (
-                    " (reminder was delivered but not recorded; it may repeat)"
+                    " (reminder delivered; deduplication relies on the comment "
+                    "marker, not this body)"
                     if delivered and not reminded
                     else ""
                 )

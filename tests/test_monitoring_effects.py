@@ -419,7 +419,7 @@ def test_a_delivered_reminder_that_fails_to_record_is_reported(monkeypatch):
     proposed = cli.apply(action, failing(), snapshot(), NOW, dry_run=False)
 
     assert proposed["applied"] is False
-    assert any("may repeat" in e for e in proposed["errors"])
+    assert any("comment marker" in e for e in proposed["errors"])
 
 
 def test_successful_reminder_records_delivery(monkeypatch):
@@ -445,3 +445,144 @@ def test_workflow_serialises_reconciliation():
     assert "cancel-in-progress: false" in workflow, (
         "cancelling mid-write could leave an issue created but unrecorded"
     )
+
+
+# ---------------------------------------------------------------------------
+# Timeouts, truncation, and reminder reconciliation across runs
+# ---------------------------------------------------------------------------
+
+
+def _probe_env(monkeypatch, run):
+    monkeypatch.setattr(cli.subprocess, "run", run)
+    monkeypatch.setattr(cli.tempfile, "mkdtemp", lambda prefix="": "/tmp/nope")
+    monkeypatch.setattr(cli.shutil, "rmtree", lambda *a, **k: None)
+    monkeypatch.setattr(cli.Path, "write_text", lambda self, text: None)
+
+
+def _record(name, ok, detail=""):
+    return "__OBSERVATION__" + json.dumps(
+        {"name": name, "ok": ok, "detail": detail}
+    )
+
+
+def test_a_timeout_keeps_the_failures_already_observed(monkeypatch):
+    """TimeoutExpired carries the child's output; discarding it loses a verdict."""
+    streamed = _record(EXPECTED_ASSERTIONS[0], False, "got None") + "\n"
+
+    class Setup:
+        returncode = 0
+        stdout = ""
+        stderr = b""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if len(calls) <= 2:
+            return Setup()
+        raise cli.subprocess.TimeoutExpired(
+            cmd=cmd, timeout=600, output=streamed, stderr="hung"
+        )
+
+    _probe_env(monkeypatch, fake_run)
+
+    observations, reason = cli.run_package_probe("0.6.0")
+    assert observations and observations[0].ok is False
+    assert reason and "timed out" in reason
+    assert evaluate_package_health(observations).status is Status.FAIL
+
+
+def test_a_truncated_trailing_record_does_not_erase_earlier_failures(monkeypatch):
+    streamed = (
+        _record(EXPECTED_ASSERTIONS[0], False, "got None")
+        + "\n"
+        + '__OBSERVATION__{"name": "truncated", "ok"'
+        + "\n"
+    )
+
+    class Setup:
+        returncode = 0
+        stdout = ""
+        stderr = b""
+
+    class Partial:
+        returncode = 1
+        stdout = streamed
+        stderr = "died"
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return Setup() if len(calls) <= 2 else Partial()
+
+    _probe_env(monkeypatch, fake_run)
+
+    observations, reason = cli.run_package_probe("0.6.0")
+    assert len(observations) == 1
+    assert observations[0].ok is False
+    assert "unparsable" in reason
+    assert evaluate_package_health(observations).status is Status.FAIL
+
+
+def test_reminder_is_not_repeated_when_the_body_edit_failed(monkeypatch):
+    """Two-run reconciliation: the comment marker is the delivery evidence."""
+    delivered = {}
+
+    def run_one(*args):
+        if args[0] == "issue" and args[1] == "comment":
+            delivered["body"] = args[args.index("--body") + 1]
+            return True, "", ""
+        if args[0] == "issue" and args[1] == "edit":
+            return False, "", "edit failed"
+        return True, "", ""
+
+    monkeypatch.setattr(cli, "_gh", run_one)
+    action = Action(ActionKind.REMIND, "package-health", "overdue", 6, 11)
+    cli.apply(action, failing(), snapshot(), NOW, dry_run=False)
+    assert "monitoring-reminder: package-health" in delivered["body"]
+
+    # Second run: the body never got the marker, but the comment did.
+    stale_body = cli.issue_body(
+        failing(), action, NOW, (NOW - timedelta(days=5)).isoformat(), reminded=False
+    )
+    payload = json.dumps(
+        [
+            {
+                "number": 11,
+                "body": stale_body,
+                "createdAt": (NOW - timedelta(days=5)).isoformat(),
+                "comments": [
+                    {"author": {"login": "github-actions"}, "body": delivered["body"]}
+                ],
+                "labels": [],
+            }
+        ]
+    )
+    monkeypatch.setattr(cli, "_gh", lambda *a: (True, payload, ""))
+    issue, error = cli.load_issue("package-health")
+    assert error is None
+    assert issue.reminded is True, "a delivered reminder must not be sent twice"
+
+    from monitoring.policy import decide
+
+    assert decide(failing(), issue, now=NOW).kind is ActionKind.UPDATE
+
+
+def test_a_bot_comment_does_not_count_as_acknowledgement(monkeypatch):
+    payload = json.dumps(
+        [
+            {
+                "number": 11,
+                "body": cli.MARKER.format(condition="package-health"),
+                "createdAt": NOW.isoformat(),
+                "comments": [
+                    {"author": {"login": "github-actions[bot]"}, "body": "reminder"}
+                ],
+                "labels": [],
+            }
+        ]
+    )
+    monkeypatch.setattr(cli, "_gh", lambda *a: (True, payload, ""))
+    issue, _ = cli.load_issue("package-health")
+    assert issue.acknowledged is False
