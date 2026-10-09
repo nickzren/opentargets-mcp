@@ -10,7 +10,6 @@ from ...utils import (
     filter_none_values,
     flatten_mechanism_targets,
     select_fields,
-    trim_literature_occurrences,
     validate_required_int,
 )
 
@@ -184,7 +183,7 @@ class DrugAssociationsApi:
         end_year: Optional[int] = None,
         end_month: Optional[int] = None,
         cursor: Optional[str] = None,
-        size: Optional[int] = 20,
+        size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Return literature co-occurrence records mentioning a drug.
 
@@ -204,7 +203,7 @@ class DrugAssociationsApi:
         - `start_year` / `end_year` (`Optional[int]`): Year filters.
         - `start_month` / `end_month` (`Optional[int]`): Month filters.
         - `cursor` (`Optional[str]`): Pagination cursor.
-        - `size` (`Optional[int]`): Max rows (default 20).
+        - `size` (`Optional[int]`): Deprecated and ignored; every call returns the full upstream page.
 
         **Returns**
         - `Dict[str, Any]`: `{"drug": {"literatureOcurrences": {"count": int, "rows": [...]}}}`.
@@ -243,7 +242,7 @@ class DrugAssociationsApi:
             }
         }
         """
-        result = await client._query(
+        return await client._query(
             graphql_query,
             build_literature_variables(
                 "chemblId",
@@ -256,7 +255,6 @@ class DrugAssociationsApi:
                 cursor=cursor,
             ),
         )
-        return trim_literature_occurrences(result, "drug", size)
 
     async def get_drug_similar_entities(
         self,
@@ -287,7 +285,10 @@ class DrugAssociationsApi:
         - `additional_entity_ids` (`Optional[List[str]]`): Additional entity IDs for similarity context.
 
         **Returns**
-        - `Dict[str, Any]`: `{"drug": {"similarEntities": [{"score": float, "object": {...}}, ...]}}`.
+        - `Dict[str, Any]`: `{"drug": {"similarEntities": [{"score": float, "object": {"__typename": str, "id": str, ...}}, ...]}}`.
+          Drug objects carry `name`, `drugType`, `maximumClinicalStage`,
+          `drugWarnings` and the derived legacy flags; Target objects
+          `approvedSymbol`; Disease objects `name`.
         """
         graphql_query = """
         query DrugSimilarEntities(
@@ -319,6 +320,14 @@ class DrugAssociationsApi:
                                 toxicityClass
                             }
                         }
+                        ... on Target {
+                            id
+                            approvedSymbol
+                        }
+                        ... on Disease {
+                            id
+                            name
+                        }
                     }
                 }
             }
@@ -333,9 +342,10 @@ class DrugAssociationsApi:
             "additionalIds": additional_entity_ids,
         }
         result = await client._query(graphql_query, filter_none_values(variables))
-        rows = result.get("drug", {}).get("similarEntities")
+        rows = (result.get("drug") or {}).get("similarEntities")
         if isinstance(rows, list):
             for row in rows:
-                if isinstance(row, dict):
-                    add_legacy_drug_fields(row.get("object"))
+                entity = row.get("object") if isinstance(row, dict) else None
+                if isinstance(entity, dict) and entity.get("__typename") == "Drug":
+                    add_legacy_drug_fields(entity)
         return result

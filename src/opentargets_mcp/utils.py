@@ -158,30 +158,6 @@ def build_literature_variables(
     )
 
 
-def trim_literature_occurrences(payload: Any, parent_key: str, size: Any) -> Any:
-    """Apply client-side row trimming for literature occurrence payloads."""
-    if (
-        size is None
-        or not isinstance(size, int)
-        or size < 0
-        or not isinstance(payload, dict)
-    ):
-        return payload
-
-    parent = payload.get(parent_key)
-    if not isinstance(parent, dict):
-        return payload
-
-    literature = parent.get("literatureOcurrences")
-    if not isinstance(literature, dict):
-        return payload
-
-    rows = literature.get("rows")
-    if isinstance(rows, list):
-        literature["rows"] = rows[:size]
-    return payload
-
-
 def flatten_mechanism_targets(
     rows: Any,
     *,

@@ -8,7 +8,6 @@ from ...utils import (
     build_literature_variables,
     promote_clinical_candidates,
     select_fields,
-    trim_literature_occurrences,
 )
 
 class TargetAssociationsApi:
@@ -171,7 +170,7 @@ class TargetAssociationsApi:
         start_month: Optional[int] = None,
         end_month: Optional[int] = None,
         cursor: Optional[str] = None,
-        size: Optional[int] = 20,
+        size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Return literature co-occurrence records for a target.
 
@@ -191,10 +190,10 @@ class TargetAssociationsApi:
         - `start_year` / `end_year` (`Optional[int]`): Restrict results by publication year.
         - `start_month` / `end_month` (`Optional[int]`): Additional month-level filtering.
         - `cursor` (`Optional[str]`): Pagination cursor provided by API.
-        - `size` (`Optional[int]`): Client-side cap on returned rows (since the API no longer paginates server-side).
+        - `size` (`Optional[int]`): Deprecated and ignored; every call returns the full upstream page.
 
         **Returns**
-        - `Dict[str, Any]`: Response `{"target": {"literatureOcurrences": {"count": int, "filteredCount": int, "earliestPubYear": int, "cursor": str, "rows": [{"pmid": str, "pmcid": str, "publicationDate": str}, ...]}}}` with rows trimmed locally to `size` when provided.
+        - `Dict[str, Any]`: Response `{"target": {"literatureOcurrences": {"count": int, "filteredCount": int, "earliestPubYear": int, "cursor": str, "rows": [{"pmid": str, "pmcid": str, "publicationDate": str}, ...]}}}`.
 
         **Errors**
         - GraphQL/network exceptions surface via the client.
@@ -203,14 +202,10 @@ class TargetAssociationsApi:
         ```python
         assoc_api = TargetAssociationsApi()
         papers = await assoc_api.get_target_literature_occurrences(
-            client, "ENSG00000157764", additional_entity_ids=["MONDO_0005300"], size=10
+            client, "ENSG00000157764", additional_entity_ids=["MONDO_0005300"]
         )
         print(papers["target"]["literatureOcurrences"]["rows"][0]["pmid"])
         ```
-
-        The Open Targets API no longer performs server-side pagination for
-        ``literatureOcurrences``. When ``size`` is provided, this helper trims the
-        returned rows client-side to the requested length.
         """
 
         graphql_query = """
@@ -246,7 +241,7 @@ class TargetAssociationsApi:
         }
         """
 
-        result = await client._query(
+        return await client._query(
             graphql_query,
             build_literature_variables(
                 "ensemblId",
@@ -259,4 +254,3 @@ class TargetAssociationsApi:
                 cursor=cursor,
             ),
         )
-        return trim_literature_occurrences(result, "target", size)
