@@ -90,6 +90,15 @@ class TestSearchTools:
         if result.get("target"):
             assert "similarEntities" in result["target"]
 
+    async def test_get_similar_targets_non_target_entities(self, client: OpenTargetsClient):
+        result = await self.search_api.get_similar_targets(
+            client, TEST_TARGET_ID_BRAF, size=3, entity_names=["disease", "drug"]
+        )
+        objects = [row["object"] for row in result["target"]["similarEntities"]]
+        assert objects, "BRAF has known similar diseases and drugs"
+        assert all(obj["__typename"] in {"Disease", "Drug"} for obj in objects)
+        assert all(obj.get("id") and obj.get("name") for obj in objects)
+
     async def test_search_entities_keeps_direct_results(self, client: OpenTargetsClient):
         """mapIds used to swap this page for a TORIPALIMAB-only search (total 1)."""
         result = await self.search_api.search_entities(client, "PD-1", page_size=5)

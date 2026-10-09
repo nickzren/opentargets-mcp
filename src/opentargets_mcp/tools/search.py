@@ -236,8 +236,9 @@ class SearchApi:
         entity_id: str,
         threshold: Optional[float] = 0.5,
         size: int = 10,
+        entity_names: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Identify targets with similar association profiles to the seed target.
+        """Identify targets, diseases, or drugs with similar association profiles to the seed target.
 
         **When to use**
         - Expand a target list by finding genes with overlapping disease or evidence profiles
@@ -252,10 +253,11 @@ class SearchApi:
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `entity_id` (`str`): Ensembl gene identifier (`"ENSG..."`) for the reference target.
         - `threshold` (`Optional[float]`): Minimum similarity score (0–1) to include; defaults to `0.5`.
-        - `size` (`int`): Maximum number of similar targets to return (default 10).
+        - `size` (`int`): Maximum number of similar entities to return (default 10).
+        - `entity_names` (`Optional[List[str]]`): Restrict results to `["target"]`, `["disease"]`, `["drug"]`, or a combination; defaults to the API's mix of all three.
 
         **Returns**
-        - `Dict[str, Any]`: GraphQL payload `{"target": {"id": str, "approvedSymbol": str, "similarEntities": [{"score": float, "object": {...}}]}}`.
+        - `Dict[str, Any]`: GraphQL payload `{"target": {"id": str, "approvedSymbol": str, "similarEntities": [{"score": float, "object": {"__typename": str, "id": str, ...}}]}}`.
 
         **Errors**
         - Raises GraphQL/network exceptions from `OpenTargetsClient` if the query fails.
@@ -274,15 +276,17 @@ class SearchApi:
             raise ValidationError("threshold must be between 0 and 1 when provided.")
 
         graphql_query_target = """
-        query SimilarTargets($entityId: String!, $threshold: Float, $size: Int!) {
+        query SimilarTargets($entityId: String!, $threshold: Float, $size: Int!, $entityNames: [String!]) {
             target(ensemblId: $entityId) {
                 id
                 approvedSymbol
-                similarEntities(threshold: $threshold, size: $size) {
+                similarEntities(threshold: $threshold, size: $size, entityNames: $entityNames) {
                     score
                     object {
                         __typename
                         ... on Target { id, approvedSymbol, approvedName }
+                        ... on Disease { id, name }
+                        ... on Drug { id, name, drugType, maximumClinicalStage }
                     }
                 }
             }
@@ -290,7 +294,12 @@ class SearchApi:
         """
         return await client._query(
             graphql_query_target,
-            {"entityId": entity_id, "threshold": threshold, "size": validated_size},
+            {
+                "entityId": entity_id,
+                "threshold": threshold,
+                "size": validated_size,
+                "entityNames": entity_names,
+            },
         )
 
     async def search_facets(
@@ -305,7 +314,7 @@ class SearchApi:
         """Return facet counts to help filter search results.
 
         **When to use**
-        - Build dynamic filters (by datasource, entity type, etc.) before issuing detailed queries
+        - Build dynamic filters (by GO term, pathway, target class, etc.) before issuing detailed queries
         - Provide an overview of the distribution of results for a given search term
         - Support UI components that need to know which categories have content
 
@@ -316,13 +325,14 @@ class SearchApi:
         **Parameters**
         - `client` (`OpenTargetsClient`): GraphQL client.
         - `query_string` (`Optional[str]`): Free-text term; defaults to `"*"` (all records) when omitted.
-        - `category_id` (`Optional[str]`): Restrict facets to a particular category (for example `"datasource"`).
+        - `category_id` (`Optional[str]`): Restrict facets to one category, e.g. `"GO:BP"`, `"Reactome"`, `"ChEMBL Target Class"`, `"Disease"` (see `categories` in the response for the full list).
         - `entity_names` (`Optional[List[str]]`): Limit the facet calculation to specific entity types.
         - `page_index` (`int`): Zero-based index for paging facet hits.
         - `page_size` (`int`): Number of facet hits to return (default 20; capped by API).
 
         **Returns**
         - `Dict[str, Any]`: Response `{"facets": {"total": int, "categories": [{"name": str, "total": int}, ...], "hits": [...]}}`.
+          Each hit's `entityIds` can hold very many IDs (about 1,500 targets for GO:0006915 apoptotic process), so keep `page_size` small.
 
         **Errors**
         - GraphQL or network failures propagate from the client.
