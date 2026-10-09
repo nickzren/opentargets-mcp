@@ -159,6 +159,19 @@ def test_promote_sorts_by_stage_then_reports_then_id_before_slicing():
     assert first["knownDrugs"]["count"] == 6
 
 
+def test_preapproval_sorts_between_phase_3_and_approval():
+    rows = [
+        _staged_row("a", "PHASE_1", reports=9),
+        _staged_row("b", "PREAPPROVAL"),
+        _staged_row("c", "PHASE_3", reports=9),
+        _staged_row("d", "APPROVAL"),
+    ]
+    parent = {"drugAndClinicalCandidates": {"count": len(rows), "rows": rows}}
+    promote_clinical_candidates(parent, page_size=4)
+
+    assert [r["id"] for r in parent["knownDrugs"]["rows"]] == ["d", "b", "c", "a"]
+
+
 def test_withdrawal_rank_is_display_only():
     parent = _staged_candidates()
     promote_clinical_candidates(parent, page_size=1)
