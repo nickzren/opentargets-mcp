@@ -13,51 +13,52 @@ A Model Context Protocol (MCP) server that exposes the Open Targets Platform Gra
 
 ## Quick Install
 
-### Option 1: Run once with `uvx` (no install)
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). `uvx` runs the published [PyPI package](https://pypi.org/project/opentargets-mcp/) without a separate install:
+
 ```bash
-uvx --from git+https://github.com/nickzren/opentargets-mcp opentargets-mcp
+uvx opentargets-mcp
 ```
 
-### Option 2: Claude Desktop (MCPM)
+### Claude Code
 ```bash
-# Install mcpm package manager
-pip install mcpm
-
-# Install the server
-mcpm install opentargets
+claude mcp add opentargets -- uvx opentargets-mcp
 ```
 
-### Option 3: Local install (dev or self-host)
+### Claude Desktop and Cursor
+Add this to `claude_desktop_config.json` (Claude Desktop: Settings → Developer → Edit Config) or `~/.cursor/mcp.json` (Cursor), then restart the client:
+```json
+{
+  "mcpServers": {
+    "opentargets": {
+      "command": "uvx",
+      "args": ["opentargets-mcp"]
+    }
+  }
+}
+```
+If the client reports `spawn uvx ENOENT`, set `command` to the absolute path printed by `which uvx`. `uvx` reuses its cached install; use `"args": ["opentargets-mcp@latest"]` to pick up new releases.
+
+### Other clients
+- **VS Code**: `code --add-mcp '{"name":"opentargets","command":"uvx","args":["opentargets-mcp"]}'`
+- **Codex**: `codex mcp add opentargets -- uvx opentargets-mcp`
+- **Any stdio MCP client**: use `uvx` as the command and `opentargets-mcp` as its argument.
+
+### Self-host
+From a clone (stdio transport by default):
 ```bash
 git clone https://github.com/nickzren/opentargets-mcp
 cd opentargets-mcp
-pip install uv
-uv sync
-
-# Run (stdio transport by default)
-uv run python -m opentargets_mcp.server
+uv run opentargets-mcp
 ```
 
-### Option 4: Docker
+With Docker (HTTP transport on port 8000):
 ```bash
 git clone https://github.com/nickzren/opentargets-mcp
 cd opentargets-mcp
-
-# Build and run with Docker Compose
-docker-compose up -d --build
-```
-Note: the default transport is `http` for docker deployments.
-
-See the configuration section below for details and how to set ports and other environment variables.
-
-### Claude Desktop Manual Import (optional)
-```bash
-mcpm import stdio opentargets \
-  --command "$(uv run which python)" \
-  --args "-m opentargets_mcp.server --transport stdio"
+docker compose up -d --build
 ```
 
-Then restart Claude Desktop to start using the Open Targets tools.
+See the configuration section below for ports and other environment variables.
 
 ## Features
 
@@ -131,7 +132,7 @@ The MCP server acts as a bridge between client applications and the Open Targets
 
 ## Prerequisites
 
-- Python 3.10+ with pip
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) for `uvx`, or Python 3.10+ to install from source
 
 ## Usage
 
@@ -151,13 +152,14 @@ uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 
 - **Environment variables**: Transport/bind use `MCP_TRANSPORT`, `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` (defaults: `stdio`, `0.0.0.0`, `8000`). API endpoint uses `OPEN_TARGETS_API_URL` (default: `https://api.platform.opentargets.org/api/v4/graphql`). For local-only development, prefer `FASTMCP_SERVER_HOST=127.0.0.1`.
 - **Validated settings**: environment configuration is parsed with a typed settings model at startup (`src/opentargets_mcp/settings.py`), so invalid values fail fast.
-- **Name resolution**: strict; unresolved names raise a clear error (use `search_entities` to find canonical IDs).
+- **Name resolution**: strict; unresolved names raise a clear error, and ambiguous names raise an error listing candidates (use `search_entities` to find canonical IDs).
+- **Proxies**: the `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` environment variables are honored; `.netrc` is never read.
 - **Tool selection guidance**: the server sends a short policy to clients to prefer curated tools, use `fields` to trim output, and reserve raw GraphQL for edge cases.
 - **Pagination guardrails**: tool wrappers enforce `page_index >= 0`, `page_size >= 1`, and a global `page_size <= 500`.
 - **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000 --api <url>` provides flexible transport and endpoint selection.
 - **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
 - **CLI helpers**: `--list-tools` prints all registered tools, and `--version` prints the package version.
-- **Rate limiting**: `OPEN_TARGETS_RATE_LIMIT_RPS` and `OPEN_TARGETS_RATE_LIMIT_BURST` can enable global server-side rate limiting. `--rate-limiting` and `OPEN_TARGETS_RATE_LIMIT_ENABLED=true` are also supported.
+- **Rate limiting**: `OPEN_TARGETS_RATE_LIMIT_RPS` and `OPEN_TARGETS_RATE_LIMIT_BURST` can enable a global limit on incoming MCP requests. It does not throttle upstream Open Targets requests: one tool call can issue many upstream requests (at most 20 concurrent). `--rate-limiting` and `OPEN_TARGETS_RATE_LIMIT_ENABLED=true` are also supported.
 
 ### Transport Modes
 
@@ -165,7 +167,7 @@ The server supports multiple transport protocols powered by FastMCP:
 
 #### **stdio transport** (default)
 ```bash
-# For Claude Desktop (via mcpm) and local CLI tools
+# For Claude Desktop and local CLI tools
 opentargets-mcp --transport stdio
 ```
 
@@ -181,12 +183,6 @@ opentargets-mcp --transport sse --host 0.0.0.0 --port 8000
 opentargets-mcp --transport http --host 0.0.0.0 --port 8000
 ```
 
-### Using with MCP Clients
-
-- **Claude Desktop**: Use mcpm installation (stdio) or direct server connection (sse)
-- **Web MCP clients**: Use SSE or HTTP transports with public URL (tunnel required)
-- **Custom integrations**: Any transport mode depending on your client implementation
-
 ### Example Scripts
 ```bash
 uv run python examples/target_validation_profile.py EGFR
@@ -199,7 +195,7 @@ uv run python examples/genetic_target_prioritization.py "inflammatory bowel dise
 
 The server wraps **68** operations from the [Open Targets Platform](https://platform-docs.opentargets.org/): **65 curated tools** plus **3 advanced GraphQL tools**. Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
 
-Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `MONDO_...`, `CHEMBL...`) or a human-readable name/symbol. Disease identifiers are largely MONDO since the 26.06 alignment to EFO 3.88; `EFO_...` IDs that were replaced no longer resolve. Colon notation (`MONDO:0004979`) is accepted and normalised. When a name is provided, the server automatically resolves it to the best matching Open Targets ID.
+Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `MONDO_...`, `CHEMBL...`) or a human-readable name/symbol. Disease identifiers are largely MONDO since the 26.06 alignment to EFO 3.88; `EFO_...` IDs that were replaced no longer resolve. Colon notation (`MONDO:0004979`) is accepted and normalised. When a name is provided, the server resolves it to the matching Open Targets ID; an ambiguous name raises an error listing candidates. Variant tools also accept rsIDs (e.g. `rs7903146`) and `chr`-prefixed or colon-separated variant IDs.
 Many core tools accept an optional `fields` list (dot-paths) to filter the response payload.
 `search_entities` also returns `search.triples` for compact `{id, entity, name}` consumption.
 For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when no curated tool fits.
@@ -228,6 +224,36 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
 - **Variant interpretation (6 tools)** — `get_variant_info`, `get_variant_credible_sets`, `get_variant_pharmacogenomics`, `get_variant_evidences`, `get_variant_intervals`, `get_variant_protein_coordinates`.
 - **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
 - **Advanced GraphQL (3 tools)** — `graphql_schema`, `graphql_query`, `graphql_batch_query`.
+
+### Changes in 0.6.1
+
+- **Name resolution**: when several search hits tie for the top score, a name
+  resolves only to a unique exact match on ID, name or symbol; otherwise the
+  tool raises an error listing candidates instead of picking the first hit.
+- **Variants and studies**: rsIDs and `chr`/colon variant notation resolve to
+  canonical variant IDs; an rsID with several alleles raises an error listing
+  them. `variant_ids` and `study_ids` lists resolve too.
+- **`search_entities`** returns the direct search results; the response shape
+  is unchanged.
+- **Known drugs**: rows are ordered by clinical stage, then clinical report
+  count, before paging. The order is a display heuristic.
+- **Literature tools** return full upstream pages; the `size` argument is
+  deprecated and ignored.
+- **`get_target_tep`** raises an error: TEP was removed from the Open Targets
+  API.
+- **`get_target_chemical_probes`** works again on API 26.9.
+- **Evidence**: `get_target_disease_evidence` and
+  `get_target_disease_biomarkers` take `enable_indirect` (default `False`,
+  unchanged behavior).
+- **`get_target_disease_biomarkers`** drops rows without biomarker data (the
+  filter previously kept them) and adds `upstreamCount`.
+- **Similar entities**: `get_disease_similar_entities` and
+  `get_drug_similar_entities` return IDs and names for every entity type, and
+  `get_similar_targets` accepts `entity_names`.
+- **Network**: transport failures return a readable error, and each call is
+  bounded by a ~60 s budget. Proxies are honored via environment variables.
+- **Removed**: `run.sh`, the OpenAI ReAct agent example, `.env.example` and the
+  `examples` extra.
 
 ### Response changes for Open Targets 26.06
 
@@ -266,11 +292,17 @@ Each grouping matches the data domains described in the Open Targets docs (targe
 ## Development
 
 ```bash
-# Run lint checks (same as CI/release)
-uv run ruff check src tests
+# Install dev dependencies
+uv sync --extra dev
 
-# Run tests
-uv run pytest tests/ -v
+# Run lint checks (same as CI/release)
+uv run ruff check src tests monitoring
+
+# Run offline tests
+uv run pytest -m "not live"
+
+# Run live API tests
+uv run pytest -m live
 
 # Inspect registered tools from CLI
 uv run opentargets-mcp --list-tools
