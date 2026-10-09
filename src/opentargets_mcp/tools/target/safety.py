@@ -3,6 +3,7 @@
 Defines API methods and MCP tools related to target safety and tractability.
 """
 from typing import Any, Dict
+from ...exceptions import UpstreamQueryError
 from ...queries import OpenTargetsClient
 
 class TargetSafetyApi:
@@ -140,7 +141,6 @@ class TargetSafetyApi:
                     mechanismOfAction
                     origin
                     probesDrugsScore
-                    probeMinerScore
                     scoreInCells
                     scoreInOrganisms
                     targetFromSourceId
@@ -152,47 +152,21 @@ class TargetSafetyApi:
         return await client._query(graphql_query, {"ensemblId": ensembl_id})
 
     async def get_target_tep(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
-        """Fetch Target Enabling Package (TEP) information for a gene.
-
-        **When to use**
-        - Determine whether a TEP exists, including links to protein portals
-        - Provide therapeutic area context for the TEP
-        - Enhance discovery workflows with curated experimental resources
-
-        **When not to use**
-        - Looking for probes or tractability metrics (use corresponding tools)
+        """Always raises: Target Enabling Package (TEP) data was removed from the Open Targets API (absent in API 26.9) and has no replacement.
 
         **Parameters**
-        - `client` (`OpenTargetsClient`): GraphQL client.
-        - `ensembl_id` (`str`): Target identifier.
-
-        **Returns**
-        - `Dict[str, Any]`: `{"target": {"id": str, "approvedSymbol": str, "tep": {"name": str, "therapeuticArea": str, "uri": str}}}`.
+        - `client` (`OpenTargetsClient`): GraphQL client (not used).
+        - `ensembl_id` (`str`): Target identifier (not used).
 
         **Errors**
-        - Propagates GraphQL/network failures.
-
-        **Example**
-        ```python
-        safety_api = TargetSafetyApi()
-        tep = await safety_api.get_target_tep(client, "ENSG00000157764")
-        print(tep["target"]["tep"])
-        ```
+        - `UpstreamQueryError` on every call, without sending a request.
         """
-        graphql_query = """
-        query TargetTEP($ensemblId: String!) {
-            target(ensemblId: $ensemblId) {
-                id
-                approvedSymbol
-                tep {
-                    name
-                    therapeuticArea
-                    uri
-                }
-            }
-        }
-        """
-        return await client._query(graphql_query, {"ensemblId": ensembl_id})
+        raise UpstreamQueryError(
+            [
+                "Target Enabling Package (TEP) data was removed from the Open "
+                "Targets API (absent in API 26.9); there is no replacement."
+            ]
+        )
 
     async def get_target_prioritization(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:
         """Return target prioritisation scores compiled across data sources.
