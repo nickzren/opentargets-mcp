@@ -39,6 +39,17 @@ class TestTargetTools:
         assert target_data is not None, "'target' data should not be None"
         assert "knownDrugs" in target_data, "'target' data should contain 'knownDrugs' key"
 
+    async def test_known_drug_rows_carry_report_counts_and_status(self, client: OpenTargetsClient):
+        result = await self.target_api.get_target_known_drugs(
+            client, TEST_TARGET_ID_EGFR, page_size=100
+        )
+        rows = result["target"]["knownDrugs"]["rows"]
+        assert rows
+        assert all(isinstance(row["clinicalReportCount"], int) for row in rows)
+        assert not any("clinicalReports" in row or "urls" in row for row in rows)
+        # status needs the first report's trialOverallStatus to stay selected.
+        assert any(row.get("status") for row in rows)
+
     async def test_get_target_safety_information(self, client: OpenTargetsClient):
         result = await self.target_api.get_target_safety_information(client, TEST_TARGET_ID_BRAF)
         assert result is not None

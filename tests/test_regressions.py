@@ -458,9 +458,9 @@ def test_promote_clinical_candidates_preserves_legacy_known_drugs_shape():
     row = known_drugs["rows"][0]
     assert row["phase"] == 3
     assert row["status"] == "Completed"
-    assert row["urls"] == [
-        {"name": "NCT1", "url": "https://example.test/NCT1"}
-    ]
+    assert row["clinicalReportCount"] == 1
+    assert "clinicalReports" not in row
+    assert "urls" not in row
     assert row["disease"]["id"] == "EFO_1"
     assert row["drug"]["isApproved"] is True
 

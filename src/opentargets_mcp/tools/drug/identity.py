@@ -4,7 +4,12 @@ Defines API methods and MCP tools related to a drug's identity and classificatio
 """
 from typing import Any, Dict, List, Optional
 from ...queries import OpenTargetsClient
-from ...utils import add_legacy_drug_fields, flatten_mechanism_targets, select_fields
+from ...utils import (
+    add_legacy_drug_fields,
+    count_clinical_reports,
+    flatten_mechanism_targets,
+    select_fields,
+)
 
 class DrugIdentityApi:
     """
@@ -34,6 +39,8 @@ class DrugIdentityApi:
 
         **Returns**
         - `Dict[str, Any]`: `{ "drug": {"id": str, "name": str, "drugType": str, "isApproved": bool, "mechanismsOfAction": {...}, "indications": {...}, "linkedTargets": {...}, ...} }`.
+          Indication rows carry `clinicalReportCount` instead of the report list;
+          use `graphql_query` for full clinical reports.
 
         **Errors**
         - Raises GraphQL/network exceptions via `OpenTargetsClient`.
@@ -86,12 +93,7 @@ class DrugIdentityApi:
                         }
                         maxClinicalStage
                         clinicalReports {
-                            id
-                            source
-                            clinicalStage
-                            trialPhase
                             trialOverallStatus
-                            url
                         }
                     }
                     count
@@ -103,6 +105,8 @@ class DrugIdentityApi:
         drug = result.get("drug")
         if isinstance(drug, dict):
             add_legacy_drug_fields(drug)
+            for row in (drug.get("indications") or {}).get("rows") or []:
+                count_clinical_reports(row)
             targets = flatten_mechanism_targets(
                 drug.get("mechanismsOfAction", {}).get("rows", [])
             )

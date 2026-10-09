@@ -98,11 +98,13 @@ class TargetAssociationsApi:
         - `page_size` (`int`): Rows per page.
 
         **Returns**
-        - `Dict[str, Any]` (`count` is the upstream total, which may exceed `len(rows)`): `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "maxClinicalStage": str, "diseases": [...], "clinicalReports": [...], "phase": int, "status": str, "disease": {...}, "urls": [...]}, ...]}}}`.
+        - `Dict[str, Any]` (`count` is the upstream total, which may exceed `len(rows)`): `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "maxClinicalStage": str, "diseases": [...], "clinicalReportCount": int, "phase": int, "status": str, "disease": {...}}, ...]}}}`.
           Rows are sorted before paging by stage (WITHDRAWAL ranks with
           APPROVAL), then clinical report count, then row `id`.
-          `phase`, `status`, `disease` and `urls` are derived for backwards
-          compatibility. `mechanismOfAction` is no longer present on these rows;
+          `phase`, `status` (the first clinical report's `trialOverallStatus`)
+          and `disease` are derived for backwards compatibility.
+          `clinicalReportCount` replaces the report list; use `graphql_query`
+          for full clinical reports. `mechanismOfAction` is no longer present on these rows;
           use `get_drug_info` for a drug's mechanisms.
 
         **Errors**
@@ -142,12 +144,7 @@ class TargetAssociationsApi:
                             }
                         }
                         clinicalReports {
-                            id
-                            source
-                            clinicalStage
-                            trialPhase
                             trialOverallStatus
-                            url
                         }
                     }
                 }
