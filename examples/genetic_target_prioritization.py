@@ -12,7 +12,7 @@ from opentargets_mcp.tools.target import TargetApi
 
 async def prioritize_target_from_genetics(disease_name: str):
     """
-    A complex drug discovery workflow that identifies and validates a drug target
+    A complex drug discovery workflow that identifies and profiles a candidate drug target
     for a disease based on human genetics.
     """
     client = OpenTargetsClient()
@@ -60,7 +60,7 @@ async def prioritize_target_from_genetics(disease_name: str):
         # 3. Find a study that HAS credible sets by iterating through the top studies
         print("\nStep 3: Searching for a study with available credible sets...")
         top_study_id = None
-        lead_credible_set = None
+        first_credible_set = None
 
         for study in sorted_studies[:10]: # Check top 10
             print(f"  - Checking study {study['id']}...")
@@ -68,18 +68,18 @@ async def prioritize_target_from_genetics(disease_name: str):
             credible_sets = credible_sets_result.get("study", {}).get("credibleSets", {}).get("rows", [])
             if credible_sets:
                 top_study_id = study['id']
-                lead_credible_set = credible_sets[0]
+                first_credible_set = credible_sets[0]
                 print(f"-> Found credible set in study '{top_study_id}'")
                 break
         
-        if not top_study_id or not lead_credible_set:
+        if not top_study_id or not first_credible_set:
             print("-> Could not find any studies with available credible sets in the top 10 results.")
             return
 
-        study_locus_id = lead_credible_set.get("studyLocusId")
-        print(f"-> Focusing on lead credible set: {study_locus_id}")
+        study_locus_id = first_credible_set.get("studyLocusId")
+        print(f"-> Focusing on first credible set: {study_locus_id}")
 
-        # 4. Analyze the lead credible set to find the most likely causal gene (via L2G)
+        # 4. Analyze the first credible set to find the most likely causal gene (via L2G)
         print("\nStep 4: Analyzing credible set to find the prioritized gene (L2G)...")
         locus_details_result = await study_api.get_credible_set_by_id(client, study_locus_id)
         l2g_predictions = locus_details_result.get("credibleSet", {}).get("l2GPredictions", {}).get("rows", [])
@@ -93,8 +93,8 @@ async def prioritize_target_from_genetics(disease_name: str):
         l2g_score = l2g_predictions[0].get("score")
         print(f"-> Prioritized Target: '{target_symbol}' (Ensembl: {target_id}) with L2G score: {l2g_score:.2f}")
 
-        # 5. Perform a validation/druggability assessment on the prioritized target
-        print(f"\nStep 5: Building validation profile for '{target_symbol}'...")
+        # 5. Profile tractability and safety of the prioritized target
+        print(f"\nStep 5: Building tractability/safety profile for '{target_symbol}'...")
         tractability_result = await target_api.get_target_tractability(client, target_id)
         safety_result = await target_api.get_target_safety_information(client, target_id)
         known_drugs_result = await target_api.get_target_known_drugs(client, target_id, page_size=5)
@@ -104,14 +104,14 @@ async def prioritize_target_from_genetics(disease_name: str):
             "query_disease": disease_display_name,
             "genetic_evidence": {
                 "top_gwas_study": top_study_id,
-                "lead_credible_set": study_locus_id,
+                "first_credible_set": study_locus_id,
                 "l2g_prediction_score": l2g_score
             },
             "prioritized_target": {
                 "symbol": target_symbol,
                 "ensembl_id": target_id
             },
-            "validation_profile": {
+            "druggability_profile": {
                 "tractability": tractability_result.get("target", {}).get("tractability", []),
                 "safety_liabilities_count": len(safety_result.get("target", {}).get("safetyLiabilities", [])),
                 "known_drugs_count": known_drugs_result.get("target", {}).get("knownDrugs", {}).get("count", 0),
@@ -119,7 +119,7 @@ async def prioritize_target_from_genetics(disease_name: str):
             }
         }
 
-        print("\n--- Workflow Complete: Genetically-Validated Target Dossier ---")
+        print("\n--- Workflow Complete: Genetically-Prioritized Target Dossier ---")
         print(json.dumps(dossier, indent=2))
 
     except Exception as e:
