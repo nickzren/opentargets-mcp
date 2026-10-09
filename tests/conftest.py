@@ -14,6 +14,13 @@ TEST_STUDY_ID = "GCST90002357"  # Example GWAS study
 TEST_STUDY_LOCUS_ID = "GCST004131_1_109817651"  # Example credible set
 
 
+def pytest_collection_modifyitems(items):
+    """Mark every test that calls the Open Targets API, so `-m "not live"` runs offline."""
+    for item in items:
+        if "client" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.live)
+
+
 @pytest.fixture(scope="function")
 async def client():
     """
