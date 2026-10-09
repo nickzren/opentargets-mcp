@@ -152,7 +152,7 @@ class DiseaseApi:
         cursor: Optional[str] = None,
         free_text_query: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Retrieve drugs with investigational or approved indications for a disease.
+        """Retrieve drugs with investigational or approved indications for a disease, ordered by clinical stage, then clinical report count (a display heuristic, not an evidence ranking).
 
         **When to use**
         - Answer "What drugs treat X disease?" questions
@@ -173,6 +173,8 @@ class DiseaseApi:
         **Returns**
         - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "knownDrugs": {"count": int, "rows": [{"drug": {...}, "phase": int, "status": str, ...}]}}}`.
           `count` is the upstream total, which may exceed `len(rows)`.
+          Rows are sorted before `size` applies by stage (WITHDRAWAL ranks with
+          APPROVAL), then clinical report count, then row `id`.
 
         **Errors**
         - `ValidationError` if `cursor` or `free_text_query` is supplied: the

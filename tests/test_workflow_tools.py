@@ -341,3 +341,80 @@ async def test_get_drug_repurposing_candidates_handles_empty_mappings(monkeypatc
             client=object(),
             efo_id="disease by name",
         )
+
+
+async def _two_target_associations(*_args, **_kwargs):
+    return {
+        "disease": {
+            "id": "EFO_123",
+            "name": "Disease",
+            "associatedTargets": {
+                "rows": [
+                    {"target": {"id": "ENSG_A", "approvedSymbol": "A"}, "score": 0.8},
+                    {"target": {"id": "ENSG_B", "approvedSymbol": "B"}, "score": 0.7},
+                ]
+            },
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_drug_repurposing_candidates_reports_when_every_lookup_fails(
+    monkeypatch,
+):
+    api = WorkflowApi()
+
+    async def failing_known_drugs(*_args, **_kwargs):
+        raise RuntimeError("upstream down")
+
+    monkeypatch.setattr(api._disease_api, "get_disease_associated_targets", _two_target_associations)
+    monkeypatch.setattr(api._target_api, "get_target_known_drugs", failing_known_drugs)
+
+    result = await api.get_drug_repurposing_candidates(client=object(), efo_id="EFO_123")
+
+    assert result["candidates"] == []
+    assert result["summary"]["targetsPassedScoreFilter"] == 2
+    assert result["summary"]["targetsFailedDrugLookup"] == 2
+    assert result["summary"]["targetsWithKnownDrugs"] == 0
+
+
+@pytest.mark.asyncio
+async def test_get_drug_repurposing_candidates_keeps_row_stage_on_support_rows(
+    monkeypatch,
+):
+    api = WorkflowApi()
+
+    async def fake_known_drugs(*_args, **kwargs):
+        stage = "WITHDRAWAL" if kwargs["ensembl_id"] == "ENSG_A" else "PHASE_3"
+        return {
+            "target": {
+                "knownDrugs": {
+                    "rows": [
+                        {
+                            "maxClinicalStage": stage,
+                            "phase": 0 if stage == "WITHDRAWAL" else 3,
+                            "drug": {"id": "CHEMBL_X", "name": "X", "isApproved": True},
+                        }
+                    ]
+                }
+            }
+        }
+
+    monkeypatch.setattr(api._disease_api, "get_disease_associated_targets", _two_target_associations)
+    monkeypatch.setattr(api._target_api, "get_target_known_drugs", fake_known_drugs)
+
+    every_phase = await api.get_drug_repurposing_candidates(
+        client=object(), efo_id="EFO_123", min_clinical_phase=0
+    )
+    support = every_phase["candidates"][0]["supportingTargets"]
+    assert {(row["targetId"], row["maxClinicalStage"], row["phase"]) for row in support} == {
+        ("ENSG_A", "WITHDRAWAL", 0),
+        ("ENSG_B", "PHASE_3", 3),
+    }
+
+    # The legacy phase filter is unchanged: withdrawn rows (phase 0) fail phase >= 2.
+    default_phase = await api.get_drug_repurposing_candidates(
+        client=object(), efo_id="EFO_123"
+    )
+    support = default_phase["candidates"][0]["supportingTargets"]
+    assert [row["targetId"] for row in support] == ["ENSG_B"]
