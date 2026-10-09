@@ -174,6 +174,9 @@ class DiseaseApi:
           `count` is the upstream total, which may exceed `len(rows)`.
           Rows are sorted before `size` applies by stage (WITHDRAWAL ranks with
           APPROVAL), then clinical report count, then row `id`.
+          `status` is the first clinical report's `trialOverallStatus`.
+          `clinicalReportCount` replaces the report list; use `graphql_query`
+          for full clinical reports.
 
         **Errors**
         - `ValidationError` if `cursor` or `free_text_query` is supplied: the
