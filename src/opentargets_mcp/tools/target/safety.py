@@ -3,7 +3,7 @@
 Defines API methods and MCP tools related to target safety and tractability.
 """
 from typing import Any, Dict
-from ...exceptions import UpstreamQueryError
+from ...exceptions import ValidationError
 from ...queries import OpenTargetsClient
 
 class TargetSafetyApi:
@@ -159,13 +159,11 @@ class TargetSafetyApi:
         - `ensembl_id` (`str`): Target identifier (not used).
 
         **Errors**
-        - `UpstreamQueryError` on every call, without sending a request.
+        - `ValidationError` on every call, without sending a request.
         """
-        raise UpstreamQueryError(
-            [
-                "Target Enabling Package (TEP) data was removed from the Open "
-                "Targets API (absent in API 26.9); there is no replacement."
-            ]
+        raise ValidationError(
+            "Target Enabling Package (TEP) data was removed from the Open "
+            "Targets API (absent in API 26.9); there is no replacement."
         )
 
     async def get_target_prioritization(self, client: OpenTargetsClient, ensembl_id: str) -> Dict[str, Any]:

@@ -14,6 +14,7 @@ from opentargets_mcp.tools.meta import MetaApi
 from .test_regressions import _FakeResponse, _FakeSession
 
 DESCRIPTIONS = server_module._PARAM_DESCRIPTIONS
+OVERRIDES = server_module._PARAM_DESCRIPTION_OVERRIDES
 
 
 @pytest.mark.asyncio
@@ -24,7 +25,9 @@ async def test_every_shared_description_reaches_the_input_schema():
     described = set()
     for tool in tools:
         for name, schema in tool.inputSchema["properties"].items():
-            if name in DESCRIPTIONS:
+            if (tool.name, name) in OVERRIDES:
+                assert schema["description"] == OVERRIDES[(tool.name, name)]
+            elif name in DESCRIPTIONS:
                 assert schema["description"] == DESCRIPTIONS[name], (tool.name, name)
                 described.add(name)
 

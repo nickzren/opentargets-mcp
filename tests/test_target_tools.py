@@ -1,6 +1,9 @@
 # tests/test_target_tools.py
 import pytest
-from opentargets_mcp.exceptions import UpstreamQueryError
+from fastmcp import Client
+
+import opentargets_mcp.server as server_module
+from opentargets_mcp.exceptions import ValidationError
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.target import TargetApi
 from .conftest import TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR
@@ -100,8 +103,26 @@ class TestTargetTools:
             async def _query(self, *_args, **_kwargs):
                 raise AssertionError("TEP was removed upstream; nothing to query")
 
-        with pytest.raises(UpstreamQueryError, match="TEP.*no replacement"):
+        with pytest.raises(ValidationError, match="TEP.*no replacement"):
             await self.target_api.get_target_tep(_UnusedClient(), "ENSG00000173193")
+
+    async def test_get_target_tep_skips_name_resolution(self, monkeypatch):
+        queries = []
+
+        class _RecordingClient:
+            async def _query(self, query, variables=None):
+                queries.append(query)
+                return {"mapIds": {"mappings": []}}
+
+        monkeypatch.setattr(server_module, "get_client", _RecordingClient)
+        async with Client(server_module.mcp) as mcp_client:
+            result = await mcp_client.call_tool(
+                "get_target_tep", {"ensembl_id": "BRAF"}, raise_on_error=False
+            )
+
+        assert result.is_error
+        assert "TEP" in result.content[0].text
+        assert queries == []
 
     async def test_get_target_literature_occurrences(self, client: OpenTargetsClient):
         result = await self.target_api.get_target_literature_occurrences(client, TEST_TARGET_ID_BRAF, size=1)
