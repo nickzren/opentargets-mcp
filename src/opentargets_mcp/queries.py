@@ -46,17 +46,24 @@ def _env_proxy(url: str) -> tuple[URL | None, dict[str, str] | None]:
     proxy = proxies.get(parts.scheme)
     if not proxy or proxy_bypass_environment(parts.hostname or "", proxies):
         return None, None
-    proxy_url = URL(proxy)
-    auth = aiohttp.BasicAuth.from_url(proxy_url)
+    if "://" not in proxy:
+        proxy = f"http://{proxy}"
+    try:
+        proxy_url = URL(proxy)
+        auth = aiohttp.BasicAuth.from_url(proxy_url)
+        bare_url = proxy_url.with_user(None)
+    except ValueError:
+        # The value may hold credentials, so it is not echoed.
+        raise NetworkError("Invalid proxy URL in the environment") from None
     headers = {"Proxy-Authorization": auth.encode()} if auth else None
-    return proxy_url.with_user(None), headers
+    return bare_url, headers
 
 
 def _retry_after_seconds(response: Any) -> int:
     """Return a Retry-After delta-seconds value; an HTTP-date counts as 0."""
     headers = getattr(response, "headers", None) or {}
     try:
-        return int(headers.get("Retry-After", ""))
+        return min(int(headers.get("Retry-After", "")), 86400)
     except ValueError:
         return 0
 
@@ -206,6 +213,11 @@ class OpenTargetsClient:
     ) -> _GraphQLHTTPResult:
         await self._ensure_session()
         proxy, proxy_headers = _env_proxy(self.base_url)
+        headers = {"Content-Type": "application/json"}
+        if proxy_headers and urlsplit(self.base_url).scheme != "https":
+            # Without a CONNECT tunnel the request itself goes to the proxy.
+            headers.update(proxy_headers)
+            proxy_headers = None
         deadline = time.monotonic() + self._request_budget
         last_exception = None
 
@@ -215,7 +227,7 @@ class OpenTargetsClient:
                 async with self.session.post(
                     self.base_url,
                     json=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     proxy=proxy,
                     proxy_headers=proxy_headers,
                     timeout=aiohttp.ClientTimeout(total=deadline - time.monotonic()),

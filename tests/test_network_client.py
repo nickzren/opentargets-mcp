@@ -116,6 +116,37 @@ def test_env_proxy_moves_credentials_out_of_the_url(proxy_env):
     assert headers == {"Proxy-Authorization": "Basic dXNlcjpzZWNyZXQ="}
 
 
+@pytest.mark.parametrize("value", ["proxy.test:3128", "http://proxy.test:3128"])
+def test_env_proxy_accepts_a_value_without_scheme(proxy_env, value):
+    proxy_env.setenv("HTTPS_PROXY", value)
+
+    proxy, _ = _env_proxy(API_URL)
+
+    assert str(proxy) == PROXY_URL
+
+
+def test_invalid_env_proxy_raises_network_error_without_echoing_it(proxy_env):
+    proxy_env.setenv("HTTPS_PROXY", "http://user:secret@[bad")
+
+    with pytest.raises(NetworkError) as exc_info:
+        _env_proxy(API_URL)
+
+    assert "secret" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_plain_http_api_sends_proxy_credentials_to_the_proxy(proxy_env):
+    proxy_env.setenv("HTTP_PROXY", "http://user:secret@proxy.test:3128")
+    client = OpenTargetsClient(base_url="http://api.test/graphql", max_retries=1)
+    client.session = _RecordingSession([_FakeResponse(200, GOOD_BODY)])
+
+    await client._query("query Meta { meta { name } }")
+
+    (kwargs,) = client.session.kwargs
+    assert kwargs["headers"]["Proxy-Authorization"] == "Basic dXNlcjpzZWNyZXQ="
+    assert kwargs["proxy_headers"] is None
+
+
 @pytest.mark.asyncio
 async def test_requests_use_env_proxy_and_send_no_credentials(proxy_env):
     proxy_env.setenv("HTTPS_PROXY", PROXY_URL)
@@ -189,6 +220,19 @@ async def test_retry_after_beyond_budget_fails_without_sleeping(clock):
         await client._query("query Meta { meta { name } }")
 
     assert client.session.calls == 1
+    assert clock.sleeps == []
+
+
+@pytest.mark.asyncio
+async def test_huge_retry_after_fails_without_overflow(clock):
+    rate_limited = _FakeResponse(503, "Service Unavailable")
+    rate_limited.headers = {"Retry-After": "1" + "0" * 400}
+    client = OpenTargetsClient(max_retries=3, retry_delay=0)
+    client.session = _FakeSession([rate_limited, _FakeResponse(200, GOOD_BODY)])
+
+    with pytest.raises(NetworkError, match="503"):
+        await client._query("query Meta { meta { name } }")
+
     assert clock.sleeps == []
 
 
