@@ -44,7 +44,13 @@ def _env_proxy(url: str) -> tuple[URL | None, dict[str, str] | None]:
     proxies = getproxies_environment()
     parts = urlsplit(url)
     proxy = proxies.get(parts.scheme)
-    if not proxy or proxy_bypass_environment(parts.hostname or "", proxies):
+    try:
+        port = parts.port
+    except ValueError:  # aiohttp reports a malformed URL when the request is made
+        port = None
+    # With the port included, NO_PROXY entries match as host or host:port.
+    host = f"{parts.hostname}:{port}" if port else parts.hostname or ""
+    if not proxy or proxy_bypass_environment(host, proxies):
         return None, None
     if "://" not in proxy:
         proxy = f"http://{proxy}"
@@ -129,8 +135,8 @@ class OpenTargetsClient:
             raise ValueError("max_retries must be >= 1")
         if retry_delay < 0:
             raise ValueError("retry_delay must be >= 0")
-        if request_budget <= 0:
-            raise ValueError("request_budget must be > 0")
+        if not 0 < request_budget < float("inf"):
+            raise ValueError("request_budget must be a positive finite number")
 
         self.base_url = base_url
         self.session: aiohttp.ClientSession | None = None
@@ -214,14 +220,25 @@ class OpenTargetsClient:
         await self._ensure_session()
         proxy, proxy_headers = _env_proxy(self.base_url)
         headers = {"Content-Type": "application/json"}
+        follow_redirects = True
         if proxy_headers and urlsplit(self.base_url).scheme != "https":
             # Without a CONNECT tunnel the request itself goes to the proxy.
+            # Its credentials then ride in the request headers, which a
+            # redirect would carry to the next host, so redirects are refused.
             headers.update(proxy_headers)
             proxy_headers = None
+            follow_redirects = False
         deadline = time.monotonic() + self._request_budget
         last_exception = None
 
         for attempt in range(self._max_retries):
+            remaining = deadline - time.monotonic()
+            if not remaining > 0:
+                # aiohttp treats a non-positive timeout as no timeout at all.
+                raise NetworkError(
+                    f"Request budget of {self._request_budget:g} s exhausted "
+                    f"after {attempt} attempt(s)"
+                ) from last_exception
             try:
                 assert self.session is not None
                 async with self.session.post(
@@ -230,8 +247,15 @@ class OpenTargetsClient:
                     headers=headers,
                     proxy=proxy,
                     proxy_headers=proxy_headers,
-                    timeout=aiohttp.ClientTimeout(total=deadline - time.monotonic()),
+                    allow_redirects=follow_redirects,
+                    timeout=aiohttp.ClientTimeout(total=remaining),
                 ) as response:
+                    if not follow_redirects and 300 <= response.status < 400:
+                        raise NetworkError(
+                            f"HTTP {response.status} redirect refused: requests through "
+                            "an authenticated HTTP proxy do not follow redirects; "
+                            "point the API URL at the final address"
+                        )
                     response_text = await response.text()
                     result = _GraphQLHTTPResult(
                         ok=response.ok,
@@ -327,6 +351,8 @@ class OpenTargetsClient:
                     f"HTTP request failed: {str(exc) or type(exc).__name__}"
                 ) from exc
 
+            except NetworkError:
+                raise
             except Exception as exc:
                 logger.error(
                     "Unexpected error during GraphQL query: %s. Query: %s... "

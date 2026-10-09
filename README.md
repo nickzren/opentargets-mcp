@@ -153,7 +153,7 @@ uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
 - **Environment variables**: Transport/bind use `MCP_TRANSPORT`, `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` (defaults: `stdio`, `0.0.0.0`, `8000`). API endpoint uses `OPEN_TARGETS_API_URL` (default: `https://api.platform.opentargets.org/api/v4/graphql`). For local-only development, prefer `FASTMCP_SERVER_HOST=127.0.0.1`.
 - **Validated settings**: environment configuration is parsed with a typed settings model at startup (`src/opentargets_mcp/settings.py`), so invalid values fail fast.
 - **Name resolution**: strict; unresolved names raise a clear error, and ambiguous names raise an error listing candidates (use `search_entities` to find canonical IDs).
-- **Proxies**: the `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` environment variables are honored; `.netrc` is never read.
+- **Proxies**: the `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` environment variables are honored (`NO_PROXY` accepts `host` or `host:port`); `.netrc` is never read. A plain-`http://` API URL reached through an authenticated proxy does not follow redirects.
 - **Tool selection guidance**: the server sends a short policy to clients to prefer curated tools, use `fields` to trim output, and reserve raw GraphQL for edge cases.
 - **Pagination guardrails**: tool wrappers enforce `page_index >= 0`, `page_size >= 1`, and a global `page_size <= 500`.
 - **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000 --api <url>` provides flexible transport and endpoint selection.
