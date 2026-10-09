@@ -95,9 +95,10 @@ mcp = FastMCP(
     version=__version__,
     instructions=(
         "Tool selection policy:\n"
-        "1) Pass names, symbols or rsIDs directly as ensembl_id/efo_id/chembl_id/variant_id/study_id "
+        "1) Pass names, symbols or rsIDs directly as ensembl_id/efo_id/chembl_id/variant_id "
         "(or list forms); they auto-resolve. An ambiguous name raises an error listing "
-        "candidates: pass one of their IDs.\n"
+        "candidates: pass one of their IDs. study_id/study_ids take study IDs "
+        "(find them with get_studies_by_disease).\n"
         "2) Use get_{entity}_info for basic lookup.\n"
         "3) Use get_{target,disease}_associated_* or get_drug_linked_* for relationships.\n"
         "4) Use get_{target,disease}_known_drugs for therapeutics.\n"
@@ -164,12 +165,19 @@ _PARAM_DESCRIPTIONS = {
     "datasource_ids": 'Evidence datasource IDs to keep, e.g. ["eva", "chembl", "gwas_credible_sets"].',
     "enable_indirect": "Also include data annotated on descendant diseases; false (default) = direct only.",
     "study_types": "Study types: gwas, eqtl, pqtl, sqtl, tuqtl, sceqtl, scpqtl, scsqtl, sctuqtl.",
-    "regions": 'Genomic regions as CHROM:START-END, e.g. ["1:154000000-155000000"].',
+    "regions": "Exact credible-set `region` values (CHROM:START-END) from earlier results; "
+    "not an overlap search, so use variant_ids for positions.",
     "study_locus_id": "Credible-set ID (`studyLocusId`) from credible-set results.",
     "study_locus_ids": "Credible-set IDs (`studyLocusId`) from credible-set results.",
     "category_id": 'Facet category from `categories[].name`, e.g. "GO:BP" or "Reactome".',
     "source_database": "Interaction source: intact, reactome, signor or string.",
 }
+# Tool-specific wording where a shared name does not apply.
+_PARAM_DESCRIPTION_OVERRIDES = {
+    ("get_disease_known_drugs", "cursor"): "Not supported; leave unset (use `size`).",
+}
+# Tools whose upstream data is gone; resolving their arguments would only add a request.
+_UNRESOLVED_TOOLS = {"get_target_tep"}
 
 
 def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
@@ -180,7 +188,11 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     async def wrapper(**kwargs: Any) -> Any:
         client = get_client()
         try:
-            resolved = await resolve_params(client, kwargs)
+            resolved = (
+                kwargs
+                if method.__name__ in _UNRESOLVED_TOOLS
+                else await resolve_params(client, kwargs)
+            )
             if "page_index" in resolved:
                 validate_required_int(resolved["page_index"], "page_index", minimum=0)
             if "page_size" in resolved:
@@ -205,9 +217,15 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
     # A new dict: functools.wraps shares the method's own __annotations__.
+    descriptions = {
+        name: _PARAM_DESCRIPTION_OVERRIDES.get(
+            (method.__name__, name), _PARAM_DESCRIPTIONS.get(name)
+        )
+        for name in signature.parameters
+    }
     wrapper.__annotations__ = {
-        name: Annotated[hint, Field(description=_PARAM_DESCRIPTIONS[name])]
-        if name in _PARAM_DESCRIPTIONS
+        name: Annotated[hint, Field(description=descriptions[name])]
+        if descriptions.get(name)
         else hint
         for name, hint in get_type_hints(method).items()
     }
