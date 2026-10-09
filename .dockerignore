@@ -1,9 +1,8 @@
-.git
-.github
-.venv
-.env
-.env.*
-!.env.example
-__pycache__
-examples/
-tests/
+# Allowlist: only what the Dockerfile copies enters the build context.
+*
+!pyproject.toml
+!README.md
+!LICENSE
+!src
+**/__pycache__
+**/*.egg-info
