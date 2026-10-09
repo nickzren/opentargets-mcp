@@ -1,5 +1,6 @@
 # tests/test_target_tools.py
 import pytest
+from opentargets_mcp.exceptions import UpstreamQueryError
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.target import TargetApi
 from .conftest import TEST_TARGET_ID_BRAF, TEST_TARGET_ID_EGFR
@@ -94,14 +95,13 @@ class TestTargetTools:
         assert result["target"] is not None
         assert "chemicalProbes" in result["target"]
 
-    async def test_get_target_tep(self, client: OpenTargetsClient):
-        # PARP14: a target that actually carries a Target Enabling Package.
-        result = await self.target_api.get_target_tep(client, "ENSG00000173193")
-        assert result is not None
-        assert "target" in result
-        assert result["target"] is not None
-        assert result["target"]["tep"] is not None
-        assert result["target"]["tep"]["name"]
+    async def test_get_target_tep_raises_without_querying(self):
+        class _UnusedClient:
+            async def _query(self, *_args, **_kwargs):
+                raise AssertionError("TEP was removed upstream; nothing to query")
+
+        with pytest.raises(UpstreamQueryError, match="TEP.*no replacement"):
+            await self.target_api.get_target_tep(_UnusedClient(), "ENSG00000173193")
 
     async def test_get_target_literature_occurrences(self, client: OpenTargetsClient):
         result = await self.target_api.get_target_literature_occurrences(client, TEST_TARGET_ID_BRAF, size=1)
