@@ -76,6 +76,42 @@ Many tools accept `fields` (dot-paths such as `["target.approvedSymbol"]`) to re
 
 Evidence results include datasource IDs and PubMed references where available. Use `get_api_metadata` to record the Open Targets API and data release with your analysis. `clinicalReportCount` counts report records, not unique trials; use `graphql_query` for full reports.
 
+## How it works
+
+```mermaid
+flowchart LR
+    A(["AI agent<br/>Claude · Codex · VS Code · Cursor"])
+
+    subgraph S["opentargets-mcp"]
+        direction TB
+        S1["1. Resolve names to IDs"]
+        S2["2. Run read-only queries"]
+        S3["3. Return structured JSON"]
+        S1 --> S2 --> S3
+    end
+
+    subgraph O["Open Targets Platform"]
+        direction TB
+        API["GraphQL API"]
+        DB[("ChEMBL · GWAS Catalog<br/>ClinVar · Europe PMC · more")]
+        API --- DB
+    end
+
+    A <-->|MCP| S
+    S <-->|GraphQL| O
+
+    classDef client fill:#e8f0fe,stroke:#4285f4,color:#1f2328
+    classDef step fill:#ffffff,stroke:#34a853,color:#1f2328
+    classDef data fill:#ffffff,stroke:#f9ab00,color:#1f2328
+    class A client
+    class S1,S2,S3 step
+    class API,DB data
+    style S fill:#e6f4ea,stroke:#34a853,color:#1f2328
+    style O fill:#fef7e0,stroke:#f9ab00,color:#1f2328
+```
+
+Ask in plain language; the server turns names into Open Targets IDs, runs read-only queries and returns structured results. No API key needed.
+
 ## Configuration
 
 The defaults work for local use. To change them, set environment variables or pass flags (`uvx opentargets-mcp --help`):
