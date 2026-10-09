@@ -79,7 +79,7 @@ class TargetAssociationsApi:
         page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
-        """Return compounds with known activity on the target.
+        """Return compounds with known activity on the target, ordered by clinical stage, then clinical report count (a display heuristic, not an evidence ranking).
 
         **When to use**
         - Inventory approved or investigational drugs acting on a gene
@@ -100,6 +100,8 @@ class TargetAssociationsApi:
 
         **Returns**
         - `Dict[str, Any]` (`count` is the upstream total, which may exceed `len(rows)`): `{"target": {"knownDrugs": {"count": int, "rows": [{"drug": {...}, "maxClinicalStage": str, "diseases": [...], "clinicalReports": [...], "phase": int, "status": str, "disease": {...}, "urls": [...]}, ...]}}}`.
+          Rows are sorted before paging by stage (WITHDRAWAL ranks with
+          APPROVAL), then clinical report count, then row `id`.
           `phase`, `status`, `disease` and `urls` are derived for backwards
           compatibility. `mechanismOfAction` is no longer present on these rows;
           use `get_drug_info` for a drug's mechanisms.

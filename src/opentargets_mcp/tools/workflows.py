@@ -217,6 +217,7 @@ class WorkflowApi:
                     "targetSymbol": target.get("target_symbol"),
                     "associationScore": target["association_score"],
                     "phase": phase,
+                    "maxClinicalStage": row.get("maxClinicalStage"),
                     "status": row.get("status"),
                     "mechanismOfAction": row.get("mechanismOfAction"),
                 }
@@ -367,6 +368,8 @@ class WorkflowApi:
 
         **Returns**
         - `Dict[str, Any]` with `disease`, `summary`, `targets`, and ranked `candidates`.
+          Each `supportingTargets` row keeps the drug-target row's
+          `maxClinicalStage` (e.g. `WITHDRAWAL`) next to its legacy `phase`.
         """
         self._validate_repurposing_inputs(
             min_association_score,

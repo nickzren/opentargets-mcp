@@ -98,7 +98,7 @@ def _candidates(n):
     return {
         "drugAndClinicalCandidates": {
             "count": n,
-            "rows": [{"id": f"row{i}", "drug": {"id": f"CHEMBL{i}"}} for i in range(n)],
+            "rows": [{"id": f"row{i:02d}", "drug": {"id": f"CHEMBL{i}"}} for i in range(n)],
         }
     }
 
@@ -115,8 +115,8 @@ def test_promote_returns_distinct_pages():
     second = _candidates(82)
     promote_clinical_candidates(first, page_index=0, page_size=3)
     promote_clinical_candidates(second, page_index=1, page_size=3)
-    assert [r["id"] for r in first["knownDrugs"]["rows"]] == ["row0", "row1", "row2"]
-    assert [r["id"] for r in second["knownDrugs"]["rows"]] == ["row3", "row4", "row5"]
+    assert [r["id"] for r in first["knownDrugs"]["rows"]] == ["row00", "row01", "row02"]
+    assert [r["id"] for r in second["knownDrugs"]["rows"]] == ["row03", "row04", "row05"]
 
 
 def test_promote_page_past_end_is_empty_but_keeps_total():
@@ -124,6 +124,47 @@ def test_promote_page_past_end_is_empty_but_keeps_total():
     promote_clinical_candidates(parent, page_index=10, page_size=3)
     assert parent["knownDrugs"]["rows"] == []
     assert parent["knownDrugs"]["count"] == 5
+
+
+def _staged_row(row_id, stage, reports=0):
+    return {
+        "id": row_id,
+        "maxClinicalStage": stage,
+        "drug": {"id": f"CHEMBL_{row_id}"},
+        "clinicalReports": [{"id": f"{row_id}-{i}"} for i in range(reports)],
+    }
+
+
+def _staged_candidates():
+    # Upstream orders rows by hash id, unrelated to clinical maturity.
+    rows = [
+        _staged_row("a", "PHASE_2", reports=9),
+        _staged_row("b", "APPROVAL", reports=1),
+        _staged_row("c", "WITHDRAWAL", reports=5),
+        _staged_row("d", "PHASE_1"),
+        _staged_row("e", "APPROVAL", reports=1),
+        _staged_row("f", "PHASE_4", reports=2),
+    ]
+    return {"drugAndClinicalCandidates": {"count": len(rows), "rows": rows}}
+
+
+def test_promote_sorts_by_stage_then_reports_then_id_before_slicing():
+    first = _staged_candidates()
+    second = _staged_candidates()
+    promote_clinical_candidates(first, page_index=0, page_size=4)
+    promote_clinical_candidates(second, page_index=1, page_size=4)
+
+    assert [r["id"] for r in first["knownDrugs"]["rows"]] == ["c", "f", "b", "e"]
+    assert [r["id"] for r in second["knownDrugs"]["rows"]] == ["a", "d"]
+    assert first["knownDrugs"]["count"] == 6
+
+
+def test_withdrawal_rank_is_display_only():
+    parent = _staged_candidates()
+    promote_clinical_candidates(parent, page_size=1)
+    withdrawn = parent["knownDrugs"]["rows"][0]
+    assert withdrawn["maxClinicalStage"] == "WITHDRAWAL"
+    assert withdrawn["phase"] == 0
 
 
 @pytest.mark.asyncio
@@ -140,9 +181,9 @@ async def test_target_known_drugs_passes_page_index_through():
     )
     assert result["target"]["knownDrugs"]["count"] == 82
     assert [r["id"] for r in result["target"]["knownDrugs"]["rows"]] == [
-        "row3",
-        "row4",
-        "row5",
+        "row03",
+        "row04",
+        "row05",
     ]
 
 

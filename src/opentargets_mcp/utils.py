@@ -90,9 +90,10 @@ def promote_clinical_candidates(
 ) -> Any:
     """Move clinical candidates to the legacy known-drugs shape.
 
-    Upstream returns every candidate and accepts no paging arguments, so the
-    page is sliced here. `count` stays the upstream total: overwriting it with
-    the page length makes a partial answer look complete.
+    Upstream returns every candidate, ordered by row hash, and accepts no
+    paging arguments, so rows are put in display order and the page is sliced
+    here. `count` stays the upstream total: overwriting it with the page length
+    makes a partial answer look complete.
     """
     if not isinstance(parent, dict):
         return parent
@@ -102,6 +103,7 @@ def promote_clinical_candidates(
         rows = candidates.get("rows")
         if isinstance(rows, list):
             candidates.setdefault("count", len(rows))
+            rows = sorted(rows, key=_clinical_display_order)
             start = page_index * page_size
             candidates["rows"] = [
                 normalize_clinical_candidate(row)
@@ -109,6 +111,18 @@ def promote_clinical_candidates(
             ]
         parent[target_key] = candidates
     return parent
+
+
+def _clinical_display_order(row: Any) -> tuple[int, int, str]:
+    """Sort key: most advanced stage, then most clinical reports, then row id.
+
+    A display heuristic, not an evidence ranking. WITHDRAWAL only follows an
+    approval, so it ranks with APPROVAL here; the legacy `phase` is unchanged.
+    """
+    row = row if isinstance(row, dict) else {}
+    stage = row.get("maxClinicalStage")
+    rank = clinical_stage_to_phase("APPROVAL" if stage == "WITHDRAWAL" else stage)
+    return (-rank, -len(row.get("clinicalReports") or []), row.get("id") or "")
 
 
 def page_list(items: Any, page_index: int, page_size: int) -> Any:
