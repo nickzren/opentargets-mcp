@@ -6,7 +6,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/v0/servers?search=nickzren/opentargets&version=latest)
 [![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](https://github.com/nickzren/opentargets-mcp/blob/main/LICENSE)
 
-An MCP server that lets AI assistants query the [Open Targets Platform](https://platform.opentargets.org/): targets, diseases, drugs, variants, studies and the evidence that links them.
+A read-only MCP server for exploring targets, diseases, drugs and genetic evidence through the [Open Targets Platform](https://platform.opentargets.org/). Use names or IDs, retrieve supporting evidence, and explore drug-repurposing candidates. No Open Targets API key required.
 
 <!-- mcp-name: io.github.nickzren/opentargets -->
 
@@ -43,7 +43,10 @@ codex mcp add opentargets -- uvx opentargets-mcp
 
 Any other stdio MCP client works the same way: command `uvx`, argument `opentargets-mcp`.
 
-Tips: if the client reports `spawn uvx ENOENT`, use the full path from `which uvx`. Use `opentargets-mcp@latest` as the argument to pick up new releases.
+Tips:
+- If the client reports `spawn uvx ENOENT`, use the full path from `which uvx`.
+- Use `opentargets-mcp@latest` as the argument to pick up new releases.
+- On Apple Silicon, a `cryptography` build error can indicate uv picked an Intel (Rosetta) Python. `uv python find` is a first clue; cached tool environments and desktop clients may use a different interpreter.
 
 ## What you can ask
 
@@ -60,20 +63,22 @@ Use names or IDs: gene symbols, disease and drug names, rsIDs, or Ensembl, MONDO
 
 | Area | Examples |
 |---|---|
-| Targets (20) | `get_target_info`, `get_target_associated_diseases`, `get_target_known_drugs`, `get_target_tractability`, `get_target_safety_information` |
-| Diseases (8) | `get_disease_info`, `get_disease_associated_targets`, `get_disease_known_drugs`, `get_disease_phenotypes` |
-| Drugs (10) | `get_drug_info`, `get_drug_linked_diseases`, `get_drug_adverse_events`, `get_drug_warnings` |
-| Evidence (2) | `get_target_disease_evidence`, `get_target_disease_biomarkers` |
-| Variants and studies (12) | `get_variant_info`, `get_credible_sets`, `get_study_info`, `get_studies_by_disease` |
-| Search and lookup (12) | `search_entities`, `map_ids`, `get_targets_batch`, `get_drugs_batch` |
-| Workflow (1) | `get_drug_repurposing_candidates` |
-| Raw GraphQL (3) | `graphql_query`, `graphql_batch_query`, `graphql_schema` |
+| Targets | `get_target_info`, `get_target_known_drugs` |
+| Diseases | `get_disease_info`, `get_disease_associated_targets` |
+| Drugs | `get_drug_info`, `get_drug_adverse_events` |
+| Evidence | `get_target_disease_evidence` |
+| Variants and studies | `get_variant_info`, `get_credible_sets` |
+| Search and lookup | `search_entities`, `map_ids` |
+| Workflow | `get_drug_repurposing_candidates` |
+| Raw GraphQL | `graphql_query`, `graphql_schema` |
 
 Many tools accept `fields` (dot-paths such as `["target.approvedSymbol"]`) to return only what you need. For anything the curated tools don't cover, use `graphql_query`.
 
+Evidence results include datasource IDs and PubMed references where available. Use `get_api_metadata` to record the Open Targets API and data release with your analysis. `clinicalReportCount` counts report records, not unique trials; use `graphql_query` for full reports.
+
 ## Configuration
 
-The defaults work for local use. To change them, set environment variables or pass flags (`opentargets-mcp --help`):
+The defaults work for local use. To change them, set environment variables or pass flags (`uvx opentargets-mcp --help`):
 
 | Variable | Flag | Default |
 |---|---|---|
@@ -99,6 +104,7 @@ With Docker (HTTP on port 8000), from the clone:
 ```bash
 docker compose up -d --build
 ```
+Connect your MCP client to `http://localhost:8000/mcp`.
 
 ## Development
 
