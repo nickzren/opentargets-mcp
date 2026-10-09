@@ -59,10 +59,10 @@ async def test_resolve_params_normalizes_disease_batches():
 
 
 @pytest.mark.asyncio
-async def test_variant_colon_notation_is_left_alone():
-    """Variant IDs use colons legitimately; normalization must not touch them."""
+async def test_variant_colon_notation_is_normalized_locally():
+    """Open Targets variant IDs use underscores; `mapIds` misses the colon form."""
     value = "chr1:154453788:C:T"
-    assert await resolve_param(_NoQueryClient(), "variant_id", value) == value
+    assert await resolve_param(_NoQueryClient(), "variant_id", value) == "1_154453788_C_T"
 
 
 @pytest.mark.asyncio
