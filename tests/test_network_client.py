@@ -5,6 +5,7 @@ import os
 import time
 from types import SimpleNamespace
 
+import aiohttp
 import pytest
 
 import opentargets_mcp.queries as queries_module
@@ -103,6 +104,19 @@ def test_env_proxy_honours_no_proxy(proxy_env, no_proxy):
     assert _env_proxy(API_URL) == (None, None)
 
 
+@pytest.mark.parametrize(
+    "no_proxy, bypassed",
+    [("api.test:8443", True), ("api.test", True), (".test", True), ("api.test:9999", False)],
+)
+def test_no_proxy_matches_host_or_host_and_port(proxy_env, no_proxy, bypassed):
+    proxy_env.setenv("HTTPS_PROXY", PROXY_URL)
+    proxy_env.setenv("NO_PROXY", no_proxy)
+
+    proxy, _ = _env_proxy("https://api.test:8443/graphql")
+
+    assert (proxy is None) is bypassed
+
+
 def test_env_proxy_is_none_when_unset(proxy_env):
     assert _env_proxy(API_URL) == (None, None)
 
@@ -145,6 +159,33 @@ async def test_plain_http_api_sends_proxy_credentials_to_the_proxy(proxy_env):
     (kwargs,) = client.session.kwargs
     assert kwargs["headers"]["Proxy-Authorization"] == "Basic dXNlcjpzZWNyZXQ="
     assert kwargs["proxy_headers"] is None
+
+
+@pytest.mark.asyncio
+async def test_plain_http_proxying_with_credentials_refuses_redirects(proxy_env):
+    proxy_env.setenv("HTTP_PROXY", "http://user:secret@proxy.test:3128")
+    client = OpenTargetsClient(base_url="http://api.test/graphql", max_retries=1)
+    client.session = _RecordingSession([_FakeResponse(307, "")])
+
+    with pytest.raises(NetworkError, match="redirect refused"):
+        await client._query("query Meta { meta { name } }")
+
+    (kwargs,) = client.session.kwargs
+    assert kwargs["allow_redirects"] is False
+
+
+@pytest.mark.asyncio
+async def test_https_proxying_keeps_credentials_on_connect_and_follows_redirects(proxy_env):
+    proxy_env.setenv("HTTPS_PROXY", "http://user:secret@proxy.test:3128")
+    client = OpenTargetsClient(max_retries=1)
+    client.session = _RecordingSession([_FakeResponse(200, GOOD_BODY)])
+
+    await client._query("query Meta { meta { name } }")
+
+    (kwargs,) = client.session.kwargs
+    assert kwargs["allow_redirects"] is True
+    assert kwargs["proxy_headers"] == {"Proxy-Authorization": "Basic dXNlcjpzZWNyZXQ="}
+    assert "Proxy-Authorization" not in kwargs["headers"]
 
 
 @pytest.mark.asyncio
@@ -223,6 +264,39 @@ async def test_retry_after_beyond_budget_fails_without_sleeping(clock):
     assert clock.sleeps == []
 
 
+class _DisconnectingSession(_RecordingSession):
+    """The first attempt fails at the transport layer; later ones succeed."""
+
+    def post(self, *args, **kwargs):
+        response = super().post(*args, **kwargs)
+        if len(self.kwargs) == 1:
+            raise aiohttp.ServerDisconnectedError()
+        return response
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("oversleep", [59, 100])  # 59 wakes exactly at the deadline
+@pytest.mark.parametrize("first_failure", ["http-503", "disconnect"])
+async def test_late_wakeup_past_the_deadline_stops_before_another_attempt(
+    clock, monkeypatch, oversleep, first_failure
+):
+    async def late_wakeup(seconds):
+        clock.now += seconds + oversleep  # the event loop resumed late
+
+    monkeypatch.setattr(queries_module.asyncio, "sleep", late_wakeup)
+    client = OpenTargetsClient(max_retries=3, retry_delay=1, request_budget=60)
+    responses = [_FakeResponse(503, "busy"), _FakeResponse(200, GOOD_BODY)]
+    if first_failure == "http-503":
+        client.session = _RecordingSession(responses)
+    else:
+        client.session = _DisconnectingSession(responses[1:])
+
+    with pytest.raises(NetworkError, match="budget of 60 s exhausted after 1 attempt"):
+        await client._query("query Meta { meta { name } }")
+
+    assert [kw["timeout"].total for kw in client.session.kwargs] == [60]
+
+
 @pytest.mark.asyncio
 async def test_huge_retry_after_fails_without_overflow(clock):
     rate_limited = _FakeResponse(503, "Service Unavailable")
@@ -236,6 +310,11 @@ async def test_huge_retry_after_fails_without_overflow(clock):
     assert clock.sleeps == []
 
 
-def test_client_rejects_non_positive_request_budget():
+@pytest.mark.parametrize("budget", [0, -1, float("nan"), float("inf")])
+def test_client_rejects_non_positive_or_non_finite_request_budget(budget):
     with pytest.raises(ValueError):
-        OpenTargetsClient(request_budget=0)
+        OpenTargetsClient(request_budget=budget)
+
+
+def test_malformed_port_does_not_break_proxy_selection(proxy_env):
+    assert _env_proxy("https://api.test:99999/graphql") == (None, None)
