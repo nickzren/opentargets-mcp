@@ -4,28 +4,22 @@
 [![PyPI](https://img.shields.io/pypi/v/opentargets-mcp)](https://pypi.org/project/opentargets-mcp/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io/v0/servers?search=nickzren/opentargets&version=latest)
-[![Open Targets](https://img.shields.io/badge/Open%20Targets-Platform-5C85DE)](https://platform.opentargets.org/)
-[![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/nickzren/opentargets-mcp)](https://github.com/nickzren/opentargets-mcp/blob/main/LICENSE)
 
-A Model Context Protocol (MCP) server that exposes the Open Targets Platform GraphQL API as a set of tools for use with Claude Desktop and other MCP-compatible clients.
+An MCP server that lets AI assistants query the [Open Targets Platform](https://platform.opentargets.org/): targets, diseases, drugs, variants, studies and the evidence that links them.
 
 <!-- mcp-name: io.github.nickzren/opentargets -->
 
-## Quick Install
+## Install
 
-Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). `uvx` runs the published [PyPI package](https://pypi.org/project/opentargets-mcp/) without a separate install:
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
-```bash
-uvx opentargets-mcp
-```
-
-### Claude Code
+**Claude Code**
 ```bash
 claude mcp add opentargets -- uvx opentargets-mcp
 ```
 
-### Claude Desktop and Cursor
-Add this to `claude_desktop_config.json` (Claude Desktop: Settings → Developer → Edit Config) or `~/.cursor/mcp.json` (Cursor), then restart the client:
+**Claude Desktop and Cursor**: add this to `claude_desktop_config.json` (Settings → Developer → Edit Config) or `~/.cursor/mcp.json`, then restart:
 ```json
 {
   "mcpServers": {
@@ -36,299 +30,87 @@ Add this to `claude_desktop_config.json` (Claude Desktop: Settings → Developer
   }
 }
 ```
-If the client reports `spawn uvx ENOENT`, set `command` to the absolute path printed by `which uvx`. `uvx` reuses its cached install; use `"args": ["opentargets-mcp@latest"]` to pick up new releases.
 
-### Other clients
-- **VS Code**: `code --add-mcp '{"name":"opentargets","command":"uvx","args":["opentargets-mcp"]}'`
-- **Codex**: `codex mcp add opentargets -- uvx opentargets-mcp`
-- **Any stdio MCP client**: use `uvx` as the command and `opentargets-mcp` as its argument.
+**VS Code**
+```bash
+code --add-mcp '{"name":"opentargets","command":"uvx","args":["opentargets-mcp"]}'
+```
 
-### Self-host
-From a clone (stdio transport by default):
+**Codex**
+```bash
+codex mcp add opentargets -- uvx opentargets-mcp
+```
+
+Any other stdio MCP client works the same way: command `uvx`, argument `opentargets-mcp`.
+
+Tips: if the client reports `spawn uvx ENOENT`, use the full path from `which uvx`. Use `opentargets-mcp@latest` as the argument to pick up new releases.
+
+## What you can ask
+
+- "Which drugs target EGFR, and how far along are they?"
+- "Which genes are most strongly associated with asthma?"
+- "Show the evidence linking BRAF to melanoma."
+- "Suggest drug repurposing candidates for type 2 diabetes."
+
+Use names or IDs: gene symbols, disease and drug names, rsIDs, or Ensembl, MONDO and ChEMBL IDs. If a name matches several entities, the tool lists the candidates so you can pick one.
+
+## Tools
+
+68 tools. Run `uvx opentargets-mcp --list-tools` for the full list.
+
+| Area | Examples |
+|---|---|
+| Targets (20) | `get_target_info`, `get_target_associated_diseases`, `get_target_known_drugs`, `get_target_tractability`, `get_target_safety_information` |
+| Diseases (8) | `get_disease_info`, `get_disease_associated_targets`, `get_disease_known_drugs`, `get_disease_phenotypes` |
+| Drugs (10) | `get_drug_info`, `get_drug_linked_diseases`, `get_drug_adverse_events`, `get_drug_warnings` |
+| Evidence (2) | `get_target_disease_evidence`, `get_target_disease_biomarkers` |
+| Variants and studies (12) | `get_variant_info`, `get_credible_sets`, `get_study_info`, `get_studies_by_disease` |
+| Search and lookup (12) | `search_entities`, `map_ids`, `get_targets_batch`, `get_drugs_batch` |
+| Workflow (1) | `get_drug_repurposing_candidates` |
+| Raw GraphQL (3) | `graphql_query`, `graphql_batch_query`, `graphql_schema` |
+
+Many tools accept `fields` (dot-paths such as `["target.approvedSymbol"]`) to return only what you need. For anything the curated tools don't cover, use `graphql_query`.
+
+## Configuration
+
+The defaults work for local use. To change them, set environment variables or pass flags (`opentargets-mcp --help`):
+
+| Variable | Flag | Default |
+|---|---|---|
+| `MCP_TRANSPORT` | `--transport` | `stdio` (also `http`, `sse`) |
+| `FASTMCP_SERVER_HOST` | `--host` | `0.0.0.0` |
+| `FASTMCP_SERVER_PORT` | `--port` | `8000` |
+| `OPEN_TARGETS_API_URL` | `--api` | `https://api.platform.opentargets.org/api/v4/graphql` |
+| `OPEN_TARGETS_RATE_LIMIT_RPS` | `--rate-limit-rps` | `0` (off); limits incoming MCP requests |
+| `OPEN_TARGETS_RATE_LIMIT_BURST` | `--rate-limit-burst` | `20` |
+
+Proxies are read from `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`.
+
+## Self-host
+
+From source:
 ```bash
 git clone https://github.com/nickzren/opentargets-mcp
 cd opentargets-mcp
 uv run opentargets-mcp
 ```
 
-With Docker (HTTP transport on port 8000):
+With Docker (HTTP on port 8000), from the clone:
 ```bash
-git clone https://github.com/nickzren/opentargets-mcp
-cd opentargets-mcp
 docker compose up -d --build
 ```
-
-See the configuration section below for ports and other environment variables.
-
-## Features
-
-### Core Capabilities
-
-- **Target Analysis**: Search genes/proteins by Ensembl ID or symbol. Access expression data, genetic constraints, pathways, protein interactions, safety profiles, and mouse phenotypes
-- **Disease Analysis**: Query diseases by ontology ID (mostly MONDO). Find associated targets, phenotypes (HPO), and research projects
-- **Drug Discovery**: Search drugs by ChEMBL ID. Access safety data, adverse events, indications, and mechanism of action
-- **Evidence Mining**: Explore target-disease associations with scored evidence from multiple sources
-- **Variant Analysis**: Query genetic variants, GWAS credible sets, and pharmacogenomics data
-- **Study Exploration**: Access GWAS studies with L2G predictions and fine-mapped loci
-- **Smart Search**: Entity resolution with synonym handling, autocomplete, and ID mapping
-- **Cross-Entity Workflows**: Multi-hop tools that chain disease, target, and drug evidence for prioritization
-- **Raw GraphQL Power Tools**: Run single and batch raw GraphQL operations with structured status envelopes
-
-## Why This Server
-
-This implementation is designed for practical Open Targets workflows:
-
-- **Curated breadth**: 65 curated tools plus 3 advanced GraphQL tools (68 total), spanning target, disease, drug, evidence, variant, study, metadata, and cross-entity workflow tasks.
-- **Safer automation**: strict ID resolution, typed parameter handling, and resilient retry behavior.
-- **Lower token overhead**: optional `fields` filters on core domain tools to return only what you need.
-- **Flexible power mode**: raw GraphQL tools are available for edge cases.
-
-### Data Sources
-
-The Open Targets Platform integrates evidence from 22+ primary data sources:
-
-- **Genetics**: Open Targets Genetics, ClinVar, UK Biobank, FinnGen, Gene2Phenotype, Orphanet, COSMIC
-- **Functional**: CRISPR screens, DepMap, GeneBass
-- **Drugs**: ChEMBL, FDA/EMA approvals, chemical probes
-- **Expression**: GTEx, Human Protein Atlas, Expression Atlas
-- **Pathways**: Reactome, Signor, IntAct
-- **Literature**: Europe PMC text mining
-- **Safety**: FAERS, pharmacogenomics data
-- **Models**: Mouse (MGI, IMPC) phenotypes
-
-## Architecture
-
-```mermaid
-graph LR
-    subgraph "Clients"
-        A[Claude Desktop]
-        B[Python Scripts]
-        C[AI Agents]
-    end
-    
-    subgraph "MCP Server"
-        D[Open Targets<br/>MCP Server]
-        E[Tool Categories<br/>Target • Disease • Drug<br/>Evidence • Search • Variant • Study]
-    end
-    
-    subgraph "Open Targets"
-        F[GraphQL API]
-        G[22+ Data Sources]
-    end
-    
-    A <-->|MCP Protocol| D
-    B <-->|Direct API| D
-    C <-->|Function Calls| D
-    D <-->|GraphQL| F
-    F <--> G
-    
-    E --> D
-    
-    style D fill:#e1f5fe
-    style F fill:#fff3e0
-```
-
-The MCP server acts as a bridge between client applications and the Open Targets Platform. It translates tool calls into GraphQL queries and provides structured access to biomedical data from 22+ integrated sources.
-
-## Prerequisites
-
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) for `uvx`, or Python 3.10+ to install from source
-
-## Usage
-
-### Running the Server Standalone
-```bash
-# From a clone, with uv (stdio transport by default)
-uv run python -m opentargets_mcp.server
-
-# Installed entrypoints
-opentargets-mcp --help
-
-# Specify transport explicitly
-uv run python -m opentargets_mcp.server --transport [stdio|sse|http]
-```
-
-### Configuration
-
-- **Environment variables**: Transport/bind use `MCP_TRANSPORT`, `FASTMCP_SERVER_HOST`, and `FASTMCP_SERVER_PORT` (defaults: `stdio`, `0.0.0.0`, `8000`). API endpoint uses `OPEN_TARGETS_API_URL` (default: `https://api.platform.opentargets.org/api/v4/graphql`). For local-only development, prefer `FASTMCP_SERVER_HOST=127.0.0.1`.
-- **Validated settings**: environment configuration is parsed with a typed settings model at startup (`src/opentargets_mcp/settings.py`), so invalid values fail fast.
-- **Name resolution**: strict; unresolved names raise a clear error, and ambiguous names raise an error listing candidates (use `search_entities` to find canonical IDs).
-- **Proxies**: the `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` environment variables are honored (`NO_PROXY` accepts `host` or `host:port`); `.netrc` is never read. A plain-`http://` API URL reached through an authenticated proxy does not follow redirects.
-- **Tool selection guidance**: the server sends a short policy to clients to prefer curated tools, use `fields` to trim output, and reserve raw GraphQL for edge cases.
-- **Pagination guardrails**: tool wrappers enforce `page_index >= 0`, `page_size >= 1`, and a global `page_size <= 500`.
-- **Command line**: `opentargets-mcp --transport [stdio|sse|http] --host 0.0.0.0 --port 8000 --api <url>` provides flexible transport and endpoint selection.
-- **Verbose logging**: add `--verbose` to elevate the global log level to DEBUG when troubleshooting.
-- **CLI helpers**: `--list-tools` prints all registered tools, and `--version` prints the package version.
-- **Rate limiting**: `OPEN_TARGETS_RATE_LIMIT_RPS` and `OPEN_TARGETS_RATE_LIMIT_BURST` can enable a global limit on incoming MCP requests. It does not throttle upstream Open Targets requests: one tool call can issue many upstream requests (at most 20 concurrent). `--rate-limiting` and `OPEN_TARGETS_RATE_LIMIT_ENABLED=true` are also supported.
-
-### Transport Modes
-
-The server supports multiple transport protocols powered by FastMCP:
-
-#### **stdio transport** (default)
-```bash
-# For Claude Desktop and local CLI tools
-opentargets-mcp --transport stdio
-```
-
-#### **SSE transport**
-```bash
-# For web-based MCP clients with Server-Sent Events
-opentargets-mcp --transport sse --host 0.0.0.0 --port 8000
-```
-
-#### **HTTP transport**
-```bash
-# For streamable HTTP MCP clients
-opentargets-mcp --transport http --host 0.0.0.0 --port 8000
-```
-
-### Example Scripts
-```bash
-uv run python examples/target_validation_profile.py EGFR
-uv run python examples/disease_to_drug.py "schizophrenia"
-uv run python examples/drug_safety_profile.py "osimertinib"
-uv run python examples/genetic_target_prioritization.py "inflammatory bowel disease"
-```
-
-## Available Tools
-
-The server wraps **68** operations from the [Open Targets Platform](https://platform-docs.opentargets.org/): **65 curated tools** plus **3 advanced GraphQL tools**. Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
-
-Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `MONDO_...`, `CHEMBL...`) or a human-readable name/symbol. Disease identifiers are largely MONDO since the 26.06 alignment to EFO 3.88; `EFO_...` IDs that were replaced no longer resolve. Colon notation (`MONDO:0004979`) is accepted and normalised. When a name is provided, the server resolves it to the matching Open Targets ID; an ambiguous name raises an error listing candidates. Variant tools also accept rsIDs (e.g. `rs4129267`) and `chr`-prefixed or colon-separated variant IDs.
-Many core tools accept an optional `fields` list (dot-paths) to filter the response payload.
-`search_entities` also returns `search.triples` for compact `{id, entity, name}` consumption.
-For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when no curated tool fits.
-
-### Quick-start shortcuts
-- `get_target_info` – Core target identity record (Ensembl IDs, synonyms, genomic coordinates)
-- `get_disease_info` – Disease/EFO summary with therapeutic area context
-- `get_drug_info` – ChEMBL-backed drug profile and mechanism data
-- `search_entities` – Unified entity search with synonym handling
-- `get_target_associated_diseases` – High-confidence target-disease links with scores
-- `get_disease_associated_targets` – Prioritised target list for an EFO disease
-- `get_target_known_drugs` – Approved and investigational agents for a target
-- `get_target_disease_evidence` – Evidence details across genetics, expression, and literature
-- `get_drug_repurposing_candidates` – Multi-hop disease -> target -> drug candidate prioritization
-- `graphql_batch_query` – Run one GraphQL query across many variable sets
-
-### Full catalog by category
-- **Target identity & biology (20 tools)** — `get_target_info`, `get_target_class`, `get_target_alternative_genes`, `get_target_associated_diseases`, `get_target_known_drugs`, `get_target_literature_occurrences`, `get_target_expression`, `get_target_pathways_and_go_terms`, `get_target_homologues`, `get_target_subcellular_locations`, `get_target_genetic_constraint`, `get_target_mouse_phenotypes`, `get_target_hallmarks`, `get_target_depmap_essentiality`, `get_target_interactions`, `get_target_safety_information`, `get_target_tractability`, `get_target_chemical_probes`, `get_target_tep`, `get_target_prioritization`.
-- **Disease analytics (8 tools)** — `get_disease_info`, `get_disease_associated_targets`, `get_disease_phenotypes`, `get_disease_otar_projects`, `get_disease_known_drugs`, `get_disease_ontology`, `get_disease_literature_occurrences`, `get_disease_similar_entities`.
-- **Drug profiling (10 tools)** — `get_drug_info`, `get_drug_cross_references`, `get_drug_linked_diseases`, `get_drug_linked_targets`, `get_drug_adverse_events`, `get_drug_pharmacovigilance`, `get_drug_warnings`, `get_drug_pharmacogenomics`, `get_drug_literature_occurrences`, `get_drug_similar_entities`.
-- **Evidence synthesis (2 tools)** — `get_target_disease_evidence`, `get_target_disease_biomarkers`.
-- **Search & discovery (4 tools)** — `search_entities`, `search_suggestions`, `get_similar_targets`, `search_facets`.
-- **Metadata & ontology utilities (5 tools)** — `get_api_metadata`, `get_association_datasources`, `get_gene_ontology_terms`, `get_interaction_resources`, `map_ids`.
-- **Workflow tools (1 tool)** — `get_drug_repurposing_candidates`.
-- **Batch lookups (3 tools)** — `get_targets_batch`, `get_diseases_batch`, `get_drugs_batch`.
-- **Variant interpretation (6 tools)** — `get_variant_info`, `get_variant_credible_sets`, `get_variant_pharmacogenomics`, `get_variant_evidences`, `get_variant_intervals`, `get_variant_protein_coordinates`.
-- **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
-- **Advanced GraphQL (3 tools)** — `graphql_schema`, `graphql_query`, `graphql_batch_query`.
-
-### Changes in 0.7.0
-
-Clinical report lists made known-drug and drug responses very large (over
-1 MB for breast cancer's default known-drugs page). They are now counts:
-
-- **`clinicalReportCount`** replaces the clinical report list on each row of
-  `get_target_known_drugs`, `get_disease_known_drugs`, `get_drug_info`
-  (indication rows) and `get_drug_linked_diseases`. A row whose report list
-  upstream is missing has no count; an empty list counts as `0`.
-- **Known-drug rows drop `urls`**, which repeated the report links.
-  `get_drug_info` mechanism `references.urls` are unchanged.
-- **Unchanged**: row order, `status` (the first report's trial status), every
-  `count`, and `get_drug_repurposing_candidates` output.
-- **`fields` paths**: `target.knownDrugs.rows.clinicalReports`,
-  `drug.indications.rows.clinicalReports` and
-  `drug.linkedDiseases.rows.clinicalReports` become `.clinicalReportCount`;
-  `target.knownDrugs.rows.urls` is removed. A removed path returns empty row
-  objects, not an error.
-- **Full reports**: use `graphql_query` (e.g. `drugAndClinicalCandidates.rows.clinicalReports`).
-- **Typical sizes**: breast cancer known drugs 1,087,303 → 5,332 characters;
-  EGFR known drugs 981,333 → 122,430; bevacizumab `get_drug_info` 670,829 →
-  81,243.
-
-### Changes in 0.6.1
-
-- **Name resolution**: when several search hits tie for the top score, a name
-  resolves only to a unique exact match on ID, name or symbol; otherwise the
-  tool raises an error listing candidates instead of picking the first hit.
-- **Variants and studies**: rsIDs and `chr`/colon variant notation resolve to
-  canonical variant IDs; an rsID with several alleles raises an error listing
-  them. `variant_ids` lists resolve too; `study_ids` accept study IDs.
-- **`search_entities`** returns the direct search results; the response shape
-  is unchanged.
-- **Known drugs**: rows are ordered by clinical stage, then clinical report
-  count, before paging. The order is a display heuristic.
-- **Literature tools** return full upstream pages; the `size` argument is
-  deprecated and ignored.
-- **`get_target_tep`** raises an error: TEP was removed from the Open Targets
-  API.
-- **`get_target_chemical_probes`** works again on API 26.9.
-- **Evidence**: `get_target_disease_evidence` and
-  `get_target_disease_biomarkers` take `enable_indirect` (default `False`,
-  unchanged results for valid IDs). An unknown disease ID now returns
-  `{"target": null}`; an unknown target ID returns an empty page.
-- **`get_target_disease_biomarkers`** drops rows without biomarker data (the
-  filter previously kept them) and adds `upstreamCount`.
-- **Similar entities**: `get_disease_similar_entities` and
-  `get_drug_similar_entities` return IDs and names for every entity type, and
-  `get_similar_targets` accepts `entity_names`.
-- **Network**: transport failures return a readable error, and each upstream
-  request, including retries, is bounded by a ~60 s budget (one tool call may
-  make several requests). Proxies are honored via environment variables.
-- **Removed**: `run.sh`, the OpenAI ReAct agent example, `.env.example` and the
-  `examples` extra.
-
-### Response changes for Open Targets 26.06
-
-Release 26.06 changed several upstream shapes. Tools were updated to match, so
-responses differ from earlier versions of this server:
-
-- **`get_target_expression`** now returns `target.baselineExpression`, a
-  paginated `{count, rows}` connection, instead of `target.expressions`. Rows
-  are per-datasource quantitative distributions (`median`, `min`, `max`, `q1`,
-  `q3`, `specificity_score`, `distribution_score`) keyed on `tissueBiosample` /
-  `celltypeBiosample`, and no longer carry `tissue` / `rna` / `protein`. The
-  tool takes `page_index` (default `0`) and `page_size` (default `25`); a single
-  target can have well over a thousand rows. `fields` keeps its position as the
-  first optional argument.
-- **Drug `synonyms` and `tradeNames`** are objects rather than plain strings.
-  Each entry is `{label, source}`, affecting `get_drug_info`,
-  `get_drug_cross_references` and `get_drugs_batch`.
-- **Disease identifiers** largely moved from EFO to MONDO with the alignment to
-  EFO 3.88. Replaced `EFO_...` IDs no longer resolve; `efo_id` parameters keep
-  their name but accept any supported disease ontology ID, in either colon or
-  underscore notation.
-- **`get_target_known_drugs`** honours `page_index`, and `knownDrugs.count` is the
-  upstream total rather than the page length. Rows no longer carry
-  `mechanismOfAction`; use `get_drug_info` for a drug's mechanisms.
-- **`get_disease_known_drugs`** rejects `cursor` and `free_text_query`: the API
-  exposes no paging or filtering on that field.
-- **`get_target_subcellular_locations`** returns `targetModifier`, naming the
-  protein form a location applies to.
-- **When the API rejects a query**, the tool error now carries the upstream
-  GraphQL message instead of a generic failure, and a `200` response containing
-  GraphQL errors raises rather than returning partial data. The raw
-  `graphql_query` tool still reports partial data with a `warning` status.
-
-Each grouping matches the data domains described in the Open Targets docs (targets, diseases, drugs, evidence, variants, and studies). For high-volume workloads, respect the platform's throttling guidance from the Open Targets API FAQ and cache downstream where possible.
 
 ## Development
 
 ```bash
-# Install dev dependencies
 uv sync --extra dev
-
-# Run lint checks (same as CI/release)
 uv run ruff check src tests
-
-# Run offline tests
-uv run pytest -m "not live"
-
-# Run live API tests
-uv run pytest -m live
-
-# Inspect registered tools from CLI
-uv run opentargets-mcp --list-tools
+uv run pytest -m "not live"   # offline
+uv run pytest -m live         # calls the Open Targets API
 ```
+
+Example scripts are in [`examples/`](https://github.com/nickzren/opentargets-mcp/tree/main/examples).
+
+## License
+
+[MIT](https://github.com/nickzren/opentargets-mcp/blob/main/LICENSE)
