@@ -21,7 +21,7 @@ class DrugIdentityApi:
         chembl_id: str,
         fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Fetch identity, indication, and mechanism data for a drug.
+        """Fetch identity, indication, and mechanism data for a drug. Indication rows carry `clinicalReportCount`, which counts report records, not unique trials; use `graphql_query` for full reports.
 
         **When to use**
         - Verify that a ChEMBL ID aligns with the intended compound

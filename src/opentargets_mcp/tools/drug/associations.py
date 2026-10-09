@@ -24,7 +24,7 @@ class DrugAssociationsApi:
         chembl_id: str,
         fields: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """List diseases connected to a drug across indications and mechanisms.
+        """List diseases connected to a drug across indications and mechanisms. `clinicalReportCount` counts report records, not unique trials; use `graphql_query` for full reports.
 
         **When to use**
         - Summarise a compound’s therapeutic footprint across disease areas
