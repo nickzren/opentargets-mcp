@@ -151,7 +151,7 @@ class DiseaseApi:
         cursor: Optional[str] = None,
         free_text_query: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Retrieve drugs with investigational or approved indications for a disease, ordered by clinical stage, then clinical report count (a display heuristic, not an evidence ranking).
+        """Retrieve drugs with investigational or approved indications for a disease, ordered by clinical stage, then clinical report count (a display heuristic, not an evidence ranking). `clinicalReportCount` counts report records, not unique trials; use `graphql_query` for full reports.
 
         **When to use**
         - Answer "What drugs treat X disease?" questions

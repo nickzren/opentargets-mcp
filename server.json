@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nickzren/opentargets",
-  "description": "Open Targets MCP server for targets, diseases, drugs, variants, and evidence",
+  "description": "Read-only Open Targets: targets, diseases, drugs and evidence by name or ID. No API key needed.",
   "status": "active",
   "websiteUrl": "https://nickzren.github.io/opentargets-mcp/",
   "repository": {

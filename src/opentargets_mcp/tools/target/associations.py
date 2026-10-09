@@ -78,7 +78,7 @@ class TargetAssociationsApi:
         page_index: int = 0,
         page_size: int = 10
     ) -> Dict[str, Any]:
-        """Return compounds with known activity on the target, ordered by clinical stage, then clinical report count (a display heuristic, not an evidence ranking).
+        """Return compounds with known activity on the target, ordered by clinical stage, then clinical report count (a display heuristic, not an evidence ranking). `clinicalReportCount` counts report records, not unique trials; use `graphql_query` for full reports.
 
         **When to use**
         - Inventory approved or investigational drugs acting on a gene
