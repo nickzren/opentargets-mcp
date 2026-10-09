@@ -71,10 +71,12 @@ def test_divergence_within_the_grace_period_is_unknown_not_pass():
     result = evaluate_registry_divergence(
         "0.5.0",
         "0.6.0",
+        registry_package_version="0.5.0",
         pypi_published_at=NOW - timedelta(hours=2),
         now=NOW,
     )
     assert result.status is Status.UNKNOWN
+    assert "grace" in result.summary
 
 
 def test_divergence_beyond_the_grace_period_fails():
@@ -148,9 +150,11 @@ def test_grace_cannot_close_an_unrelated_standing_divergence():
     result = evaluate_registry_divergence(
         "0.2.0",
         "0.7.0",
+        registry_package_version="0.2.0",
         pypi_published_at=NOW - timedelta(minutes=5),
         now=NOW,
     )
+    assert "grace" in result.summary
     standing = IssueSnapshot(
         number=3,
         state="open",

@@ -103,11 +103,7 @@ def run_against(fake, monkeypatch):
             action, result, issue, now, dry_run=False
         ),
         inspect_issue=cli.inspect_issue,
-        read_back=lambda number, condition: (
-            cli.load_issue_by_number(number, condition)
-            if number is not None
-            else cli.load_issue(condition)
-        ),
+        read_back=cli.load_issue_by_number,
         owner=cli.OWNER,
         label=cli.LABEL,
     )
