@@ -170,7 +170,7 @@ class DiseaseApi:
         - `free_text_query` (`Optional[str]`): Not supported; raises `ValidationError` if set.
 
         **Returns**
-        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "knownDrugs": {"count": int, "rows": [{"drug": {...}, "phase": int, "status": str, ...}]}}}`.
+        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "knownDrugs": {"count": int, "rows": [{"drug": {...}, "phase": int, "status": str, "clinicalReportCount": int, ...}]}}}`.
           `count` is the upstream total, which may exceed `len(rows)`.
           Rows are sorted before `size` applies by stage (WITHDRAWAL ranks with
           APPROVAL), then clinical report count, then row `id`.
@@ -209,12 +209,7 @@ class DiseaseApi:
                             }
                         }
                         clinicalReports {
-                            id
-                            source
-                            clinicalStage
-                            trialPhase
                             trialOverallStatus
-                            url
                         }
                     }
                 }

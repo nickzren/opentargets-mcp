@@ -7,6 +7,7 @@ from ...queries import OpenTargetsClient
 from ...utils import (
     add_legacy_drug_fields,
     build_literature_variables,
+    count_clinical_reports,
     filter_none_values,
     flatten_mechanism_targets,
     select_fields,
@@ -40,7 +41,8 @@ class DrugAssociationsApi:
         - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
 
         **Returns**
-        - `Dict[str, Any]`: `{"drug": {"id": str, "name": str, "linkedDiseases": {"count": int, "rows": [{"id": str, "name": str, "therapeuticAreas": [...]}, ...]}}}`.
+        - `Dict[str, Any]`: `{"drug": {"id": str, "name": str, "linkedDiseases": {"count": int, "rows": [{"id": str, "name": str, "therapeuticAreas": [...], "maxClinicalStage": str, "clinicalReportCount": int}, ...]}}}`.
+          Use `graphql_query` for full clinical reports.
 
         **Errors**
         - GraphQL and network failures are surfaced via the client.
@@ -72,12 +74,7 @@ class DrugAssociationsApi:
                             }
                         }
                         clinicalReports {
-                            id
-                            source
-                            clinicalStage
-                            trialPhase
                             trialOverallStatus
-                            url
                         }
                     }
                 }
@@ -96,7 +93,9 @@ class DrugAssociationsApi:
                     disease = row.get("disease")
                     if isinstance(disease, dict):
                         disease.setdefault("maxClinicalStage", row.get("maxClinicalStage"))
-                        disease.setdefault("clinicalReports", row.get("clinicalReports"))
+                        count_clinical_reports(row)
+                        if "clinicalReportCount" in row:
+                            disease.setdefault("clinicalReportCount", row["clinicalReportCount"])
                         rows.append(disease)
                 drug["linkedDiseases"] = {"count": len(rows), "rows": rows}
         return select_fields(result, fields)

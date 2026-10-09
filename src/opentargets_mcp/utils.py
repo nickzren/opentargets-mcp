@@ -247,6 +247,18 @@ def add_legacy_drug_fields(drug: Any) -> Any:
     return drug
 
 
+def count_clinical_reports(row: Any) -> Any:
+    """Replace a row's `clinicalReports` list with `clinicalReportCount`.
+
+    A missing or null list leaves no count: missing data is not zero reports.
+    """
+    if isinstance(row, dict):
+        reports = row.pop("clinicalReports", None)
+        if isinstance(reports, list):
+            row["clinicalReportCount"] = len(reports)
+    return row
+
+
 def normalize_clinical_candidate(row: Any) -> Any:
     """Add legacy known-drug row fields to current clinical candidate rows."""
     if not isinstance(row, dict):
@@ -257,13 +269,7 @@ def normalize_clinical_candidate(row: Any) -> Any:
     if isinstance(reports, list) and reports:
         first_report = next((item for item in reports if isinstance(item, dict)), {})
         row.setdefault("status", first_report.get("trialOverallStatus"))
-        urls = [
-            {"name": item.get("id") or item.get("source"), "url": item.get("url")}
-            for item in reports
-            if isinstance(item, dict) and item.get("url")
-        ]
-        if urls:
-            row.setdefault("urls", urls)
+    count_clinical_reports(row)
 
     add_legacy_drug_fields(row.get("drug"))
 
