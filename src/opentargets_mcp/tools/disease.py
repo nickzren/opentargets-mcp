@@ -10,7 +10,6 @@ from ..utils import (
     filter_none_values,
     promote_clinical_candidates,
     select_fields,
-    trim_literature_occurrences,
     validate_required_int,
 )
 
@@ -309,7 +308,7 @@ class DiseaseApi:
         end_year: Optional[int] = None,
         end_month: Optional[int] = None,
         cursor: Optional[str] = None,
-        size: Optional[int] = 20,
+        size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Return literature co-occurrence records mentioning a disease.
 
@@ -329,7 +328,7 @@ class DiseaseApi:
         - `start_year` / `end_year` (`Optional[int]`): Restrict by publication year.
         - `start_month` / `end_month` (`Optional[int]`): Optional month filters.
         - `cursor` (`Optional[str]`): Pagination cursor.
-        - `size` (`Optional[int]`): Max rows to return (default 20).
+        - `size` (`Optional[int]`): Deprecated and ignored; every call returns the full upstream page.
 
         **Returns**
         - `Dict[str, Any]`: `{"disease": {"literatureOcurrences": {"count": int, "rows": [{"pmid": str, "pmcid": str, "publicationDate": str}, ...]}}}`.
@@ -368,7 +367,7 @@ class DiseaseApi:
             }
         }
         """
-        result = await client._query(
+        return await client._query(
             graphql_query,
             build_literature_variables(
                 "efoId",
@@ -381,7 +380,6 @@ class DiseaseApi:
                 cursor=cursor,
             ),
         )
-        return trim_literature_occurrences(result, "disease", size)
 
     async def get_disease_similar_entities(
         self,
@@ -412,7 +410,10 @@ class DiseaseApi:
         - `additional_entity_ids` (`Optional[List[str]]`): Additional entity IDs for similarity context.
 
         **Returns**
-        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "similarEntities": [{"score": float, "object": {"id": str, "name": str}}, ...]}}`.
+        - `Dict[str, Any]`: `{"disease": {"id": str, "name": str, "similarEntities": [{"score": float, "object": {"__typename": str, "id": str, ...}}, ...]}}`.
+          Disease objects carry `name`, `description` and `therapeuticAreas`;
+          Target objects `approvedSymbol`; Drug objects `name`, `drugType` and
+          `maximumClinicalStage`.
         """
         graphql_query = """
         query DiseaseSimilarEntities(
@@ -442,6 +443,16 @@ class DiseaseApi:
                                 id
                                 name
                             }
+                        }
+                        ... on Target {
+                            id
+                            approvedSymbol
+                        }
+                        ... on Drug {
+                            id
+                            name
+                            drugType
+                            maximumClinicalStage
                         }
                     }
                 }

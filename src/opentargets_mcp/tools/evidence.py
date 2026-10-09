@@ -20,8 +20,9 @@ class EvidenceApi:
         size: int = 10,
         cursor: Optional[str] = None,
         fields: Optional[List[str]] = None,
+        enable_indirect: bool = False,
     ) -> Dict[str, Any]:
-        """Retrieve evidence strings linking a target to a disease.
+        """Retrieve evidence strings linking a target to a disease. Disease-side association scores are indirect (they include descendant diseases); set `enable_indirect=True` to see the evidence behind them.
 
         **When to use**
         - Audit the individual evidence components supporting a target–disease association
@@ -40,9 +41,11 @@ class EvidenceApi:
         - `size` (`int`): Maximum evidence rows to return per page (default 10).
         - `cursor` (`Optional[str]`): Cursor token from a previous call for pagination.
         - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
+        - `enable_indirect` (`bool`): Include evidence annotated on descendant diseases (default False).
 
         **Returns**
-        - `Dict[str, Any]`: `{"target": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "datasourceId": str, "datatypeId": str, ...}], ...}}}`.
+        - `Dict[str, Any]`: `{"target": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "datasourceId": str, "datatypeId": str, "disease": {...}, ...}], ...}}}`.
+          Each row's `disease` is the term the evidence was annotated on.
 
         **Errors**
         - Propagates GraphQL and network exceptions from `OpenTargetsClient`.
@@ -56,19 +59,21 @@ class EvidenceApi:
         print(len(evidences["target"]["evidences"]["rows"]))
         ```
         """
-        # Note: The API structures evidence under the 'target' or 'disease' object.
-        # This function queries via the 'target' object.
+        # Only Disease.evidences takes enableIndirect, and omitting it means
+        # indirect, so it is always sent; the result is re-keyed under `target`.
         graphql_query = """
         query TargetDiseaseEvidences(
             $ensemblId: String!,
-            $efoId: String!, # API uses efoIds: [String!]
+            $efoId: String!,
             $datasourceIds: [String!],
+            $enableIndirect: Boolean!,
             $size: Int!,
             $cursor: String
         ) {
-            target(ensemblId: $ensemblId) {
+            disease(efoId: $efoId) {
                 evidences(
-                    efoIds: [$efoId], # Pass efo_id as a list
+                    ensemblIds: [$ensemblId],
+                    enableIndirect: $enableIndirect,
                     datasourceIds: $datasourceIds,
                     size: $size,
                     cursor: $cursor
@@ -103,11 +108,12 @@ class EvidenceApi:
             "ensemblId": ensembl_id,
             "efoId": efo_id,
             "datasourceIds": datasource_ids,
+            "enableIndirect": enable_indirect,
             "size": validated_size,
             "cursor": cursor,
         }
         result = await client._query(graphql_query, filter_none_values(variables))
-        return select_fields(result, fields)
+        return select_fields({"target": result.get("disease")}, fields)
 
     async def get_target_disease_biomarkers(
         self,
@@ -117,8 +123,9 @@ class EvidenceApi:
         size: int = 10,
         cursor: Optional[str] = None,
         fields: Optional[List[str]] = None,
+        enable_indirect: bool = False,
     ) -> Dict[str, Any]:
-        """Inspect evidence for biomarker annotations linking a target and disease.
+        """Inspect evidence for biomarker annotations linking a target and disease. Disease-side association scores are indirect (they include descendant diseases); set `enable_indirect=True` to see the evidence behind them.
 
         **When to use**
         - Highlight biomarker candidates referenced within clinical or literature evidence
@@ -136,9 +143,10 @@ class EvidenceApi:
         - `size` (`int`): Maximum evidence strings per page (default 10).
         - `cursor` (`Optional[str]`): Pagination cursor from a previous response.
         - `fields` (`Optional[List[str]]`): Optional dot-paths to filter the response payload.
+        - `enable_indirect` (`bool`): Include evidence annotated on descendant diseases (default False).
 
         **Returns**
-        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "filteredCount": int, "unfilteredCount": int, "cursor": str}}}` where `count`/`filteredCount` reflect post-filtering rows. Presence of biomarker fields depends on datasource.
+        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "filteredCount": int, "unfilteredCount": int, "upstreamCount": int, "cursor": str}}}` where `count`/`filteredCount` reflect post-filtering rows, `unfilteredCount` the page before filtering and `upstreamCount` the upstream total. A row is kept when it has a `biomarkerName`, a non-empty `biomarkerList` or any non-empty `biomarkers` entry. Presence of biomarker fields depends on datasource.
 
         **Errors**
         - GraphQL and transport errors propagate from `OpenTargetsClient`.
@@ -156,11 +164,17 @@ class EvidenceApi:
         query TargetDiseaseBiomarkers(
             $ensemblId: String!,
             $efoId: String!,
+            $enableIndirect: Boolean!,
             $size: Int!,
             $cursor: String
         ) {
-            target(ensemblId: $ensemblId) {
-                evidences(efoIds: [$efoId], size: $size, cursor: $cursor) {
+            disease(efoId: $efoId) {
+                evidences(
+                    ensemblIds: [$ensemblId],
+                    enableIndirect: $enableIndirect,
+                    size: $size,
+                    cursor: $cursor
+                ) {
                     count
                     cursor
                     rows {
@@ -198,22 +212,27 @@ class EvidenceApi:
         variables = {
             "ensemblId": ensembl_id,
             "efoId": efo_id,
+            "enableIndirect": enable_indirect,
             "size": validated_size,
             "cursor": cursor,
         }
         result = await client._query(graphql_query, filter_none_values(variables))
+        result = {"target": result.get("disease")}
 
-        evidences = result.get("target", {}).get("evidences", {})
+        evidences = (result.get("target") or {}).get("evidences", {})
         rows = evidences.get("rows", [])
         if isinstance(rows, list):
             biomarker_rows = []
             for row in rows:
                 if not isinstance(row, dict):
                     continue
-                if row.get("biomarkerName") or row.get("biomarkers") or row.get(
-                    "biomarkerList"
+                if (
+                    row.get("biomarkerName")
+                    or row.get("biomarkerList")
+                    or any((row.get("biomarkers") or {}).values())
                 ):
                     biomarker_rows.append(row)
+            evidences["upstreamCount"] = evidences.get("count")
             evidences["unfilteredCount"] = len(rows)
             evidences["rows"] = biomarker_rows
             evidences["count"] = len(biomarker_rows)

@@ -573,7 +573,7 @@ async def test_target_disease_evidence_supports_fields_projection():
     class _FakeClient:
         async def _query(self, *_args, **_kwargs):
             return {
-                "target": {
+                "disease": {
                     "evidences": {
                         "count": 1,
                         "rows": [{"id": "ev1", "score": 0.7, "datasourceId": "eva"}],
@@ -596,9 +596,9 @@ async def test_target_disease_biomarkers_returns_only_biomarker_rows():
     class _FakeClient:
         async def _query(self, *_args, **_kwargs):
             return {
-                "target": {
+                "disease": {
                     "evidences": {
-                        "count": 3,
+                        "count": 40,
                         "rows": [
                             {"id": "1", "biomarkerName": "PD-L1"},
                             {"id": "2", "biomarkers": {"geneExpression": []}},
@@ -615,10 +615,11 @@ async def test_target_disease_biomarkers_returns_only_biomarker_rows():
         "EFO_0003884",
     )
     rows = result["target"]["evidences"]["rows"]
-    assert [row["id"] for row in rows] == ["1", "2"]
-    assert result["target"]["evidences"]["count"] == 2
+    assert [row["id"] for row in rows] == ["1"]
+    assert result["target"]["evidences"]["count"] == 1
     assert result["target"]["evidences"]["unfilteredCount"] == 3
-    assert result["target"]["evidences"]["filteredCount"] == 2
+    assert result["target"]["evidences"]["filteredCount"] == 1
+    assert result["target"]["evidences"]["upstreamCount"] == 40
 
 
 @pytest.mark.asyncio

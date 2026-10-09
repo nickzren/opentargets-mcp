@@ -1,4 +1,6 @@
 # tests/test_drug_tools.py
+import pathlib
+
 import pytest
 from opentargets_mcp.queries import OpenTargetsClient
 from opentargets_mcp.tools.drug import DrugApi
@@ -136,3 +138,67 @@ async def test_known_drugs_count_is_upstream_total(client: OpenTargetsClient):
     first_ids = [row["id"] for row in known["rows"]]
     second_ids = [row["id"] for row in second["target"]["knownDrugs"]["rows"]]
     assert first_ids != second_ids
+
+
+class _FakeClient:
+    def __init__(self, response):
+        self.response = response
+
+    async def _query(self, *_args, **_kwargs):
+        return self.response
+
+
+@pytest.mark.parametrize(
+    "module_path, query_name",
+    [
+        ("src/opentargets_mcp/tools/disease.py", "DiseaseSimilarEntities"),
+        ("src/opentargets_mcp/tools/drug/associations.py", "DrugSimilarEntities"),
+    ],
+)
+def test_similar_entities_queries_select_every_entity_type(module_path, query_name):
+    """Without a fragment, objects of that type come back as a bare `__typename`."""
+    source = pathlib.Path(module_path).read_text()
+    body = source.split(f"query {query_name}", 1)[1].split('"""', 1)[0]
+    for entity_type in ("Target", "Disease", "Drug"):
+        assert f"... on {entity_type} {{" in body, f"{query_name} lacks {entity_type}"
+
+
+@pytest.mark.asyncio
+async def test_drug_similar_entities_adds_legacy_fields_only_to_drugs():
+    target = {"__typename": "Target", "id": "ENSG00000157764", "approvedSymbol": "BRAF"}
+    disease = {"__typename": "Disease", "id": "MONDO_0005105", "name": "melanoma"}
+    drug = {
+        "__typename": "Drug",
+        "id": "CHEMBL3301610",
+        "maximumClinicalStage": "APPROVAL",
+        "drugWarnings": [],
+    }
+    response = {
+        "drug": {
+            "id": TEST_DRUG_ID_VEMURAFENIB,
+            "similarEntities": [
+                {"score": 0.9, "object": dict(drug)},
+                {"score": 0.8, "object": dict(target)},
+                {"score": 0.7, "object": dict(disease)},
+            ],
+        }
+    }
+
+    result = await DrugApi().get_drug_similar_entities(
+        _FakeClient(response),
+        TEST_DRUG_ID_VEMURAFENIB,
+        entity_names=["drug", "target", "disease"],
+    )
+
+    objects = [row["object"] for row in result["drug"]["similarEntities"]]
+    assert objects[0]["isApproved"] is True
+    assert objects[0]["maximumClinicalTrialPhase"] == 4
+    assert objects[1:] == [target, disease]
+
+
+@pytest.mark.asyncio
+async def test_drug_similar_entities_returns_null_drug_for_unknown_id():
+    result = await DrugApi().get_drug_similar_entities(
+        _FakeClient({"drug": None}), "CHEMBL999999999"
+    )
+    assert result == {"drug": None}
