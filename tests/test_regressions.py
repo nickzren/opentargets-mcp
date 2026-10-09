@@ -546,6 +546,26 @@ async def test_get_similar_targets_rejects_invalid_threshold():
 
 
 @pytest.mark.asyncio
+async def test_get_similar_targets_selects_every_entity_type():
+    """Drug and disease neighbours used to come back as bare {__typename}."""
+    captured = {}
+
+    class _Client:
+        async def _query(self, query, variables=None):
+            captured.update(query=query, variables=variables)
+            return {"target": None}
+
+    await SearchApi().get_similar_targets(
+        _Client(), "ENSG00000157764", entity_names=["drug"]
+    )
+
+    assert captured["variables"]["entityNames"] == ["drug"]
+    assert "entityNames: $entityNames" in captured["query"]
+    for fragment in ("... on Target", "... on Disease", "... on Drug"):
+        assert fragment in captured["query"]
+
+
+@pytest.mark.asyncio
 async def test_variant_evidences_rejects_none_size():
     api = VariantApi()
     client = OpenTargetsClient()
