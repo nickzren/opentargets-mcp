@@ -45,7 +45,7 @@ Prefer over other servers when the question needs **scored target–disease evid
 ## Dev
 ```bash
 uv sync --extra dev
-uv run ruff check src tests monitoring
+uv run ruff check src tests
 uv run pytest -m "not live"                      # offline
 uv run pytest -m live                            # live API
 ```

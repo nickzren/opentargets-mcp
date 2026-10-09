@@ -195,7 +195,7 @@ uv run python examples/genetic_target_prioritization.py "inflammatory bowel dise
 
 The server wraps **68** operations from the [Open Targets Platform](https://platform-docs.opentargets.org/): **65 curated tools** plus **3 advanced GraphQL tools**. Every tool returns structured JSON that mirrors the Open Targets GraphQL schema, and you can inspect the full machine-readable list with the MCP `list_tools` request.
 
-Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `MONDO_...`, `CHEMBL...`) or a human-readable name/symbol. Disease identifiers are largely MONDO since the 26.06 alignment to EFO 3.88; `EFO_...` IDs that were replaced no longer resolve. Colon notation (`MONDO:0004979`) is accepted and normalised. When a name is provided, the server resolves it to the matching Open Targets ID; an ambiguous name raises an error listing candidates. Variant tools also accept rsIDs (e.g. `rs7903146`) and `chr`-prefixed or colon-separated variant IDs.
+Most domain tools accept either a canonical identifier (e.g., `ENSG...`, `MONDO_...`, `CHEMBL...`) or a human-readable name/symbol. Disease identifiers are largely MONDO since the 26.06 alignment to EFO 3.88; `EFO_...` IDs that were replaced no longer resolve. Colon notation (`MONDO:0004979`) is accepted and normalised. When a name is provided, the server resolves it to the matching Open Targets ID; an ambiguous name raises an error listing candidates. Variant tools also accept rsIDs (e.g. `rs4129267`) and `chr`-prefixed or colon-separated variant IDs.
 Many core tools accept an optional `fields` list (dot-paths) to filter the response payload.
 `search_entities` also returns `search.triples` for compact `{id, entity, name}` consumption.
 For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when no curated tool fits.
@@ -296,7 +296,7 @@ Each grouping matches the data domains described in the Open Targets docs (targe
 uv sync --extra dev
 
 # Run lint checks (same as CI/release)
-uv run ruff check src tests monitoring
+uv run ruff check src tests
 
 # Run offline tests
 uv run pytest -m "not live"

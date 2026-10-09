@@ -154,6 +154,11 @@ its bookkeeping unwritten.
 
 `monitoring/` is outside `src/`, so it does not ship to PyPI.
 
+`monitor.yml` also runs a separate `schema` job that validates every query on
+the default branch against the live API schema (`tests/test_query_schema.py`).
+It catches upstream field removals before a release; a failure shows as a
+failed workflow run, not as a tracking issue.
+
 ## Operation
 
 Daily monitoring is enabled at **06:17 UTC** on the default branch. Scheduled
