@@ -61,6 +61,8 @@ class MetaApi:
 
     async def get_association_datasources(self, client: OpenTargetsClient) -> Dict[str, Any]:
         """List sources contributing target–disease association evidence.
+        The 26.09 release returns `[]` upstream; datasource ids also appear in
+        the GraphQL field `associatedDiseases.rows.datasourceScores`.
 
         **When to use**
         - Build UI filters keyed by association datasource or datatype
@@ -154,7 +156,7 @@ class MetaApi:
         - `go_ids` (`List[str]`): One or more identifiers such as `"GO:0006915"`. Provide 1–50 IDs per call for best performance.
 
         **Returns**
-        - `Dict[str, Any]`: Response shaped as `{"geneOntologyTerms": [{"id": str, "name": str}, ...]}`; missing IDs result in an empty list entry.
+        - `Dict[str, Any]`: Response shaped as `{"geneOntologyTerms": [{"id": str, "name": str}, ...]}`; unknown IDs come back as `null` entries.
 
         **Errors**
         - GraphQL and network errors are surfaced directly from `OpenTargetsClient`.
