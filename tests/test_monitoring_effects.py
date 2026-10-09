@@ -53,6 +53,26 @@ def test_unparsable_lookup_output_is_an_error(monkeypatch):
     assert error is not None
 
 
+def test_malformed_issue_marker_is_a_lookup_error_not_a_crash(monkeypatch):
+    """A hand-edited body used to raise ValueError and stop every daily run."""
+    payload = json.dumps(
+        [
+            {
+                "number": 11,
+                "body": cli.MARKER.format(condition="package-health")
+                + "\n<!-- failures: two -->",
+                "createdAt": NOW.isoformat(),
+                "comments": [],
+                "labels": [],
+            }
+        ]
+    )
+    monkeypatch.setattr(cli, "_gh", lambda *a: (True, payload, ""))
+    issue, error = cli.load_issue("package-health")
+    assert issue is None
+    assert error is not None and "unusable output" in error
+
+
 def test_successful_lookup_with_no_match_reports_no_error(monkeypatch):
     monkeypatch.setattr(cli, "_gh", lambda *a: (True, "[]", ""))
     issue, error = cli.load_issue("package-health")

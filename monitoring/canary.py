@@ -90,15 +90,13 @@ def run_canary(
     load_issue: Callable[[str], tuple[Optional[IssueSnapshot], Optional[str]]],
     apply_action: Callable[..., Any],
     inspect_issue: Callable[[int], Optional[dict]],
-    read_back: Callable[[Optional[int], str], tuple[Optional[IssueSnapshot], Optional[str]]],
+    read_back: Callable[[int, str], tuple[Optional[IssueSnapshot], Optional[str]]],
     owner: str = "nickzren",
     label: str = "monitoring",
-    load_issue_override: Optional[Callable] = None,
 ) -> dict:
     """Drive the lifecycle and verify the resulting issue. Never raises."""
     failures: list[str] = []
     steps_run: list[dict] = []
-    reader = load_issue_override or load_issue
 
     existing = find_open_canary()
     if existing:
@@ -120,7 +118,7 @@ def run_canary(
         # both inconsistent (a fresh issue can be missing from a listing) and
         # unbound (it can resolve to somebody else's issue).
         issue, error = (
-            reader(CONDITION) if number is None else read_back(number, CONDITION)
+            load_issue(CONDITION) if number is None else read_back(number, CONDITION)
         )
         if error:
             failures.append(f"{step.name}: issue lookup failed: {error}")

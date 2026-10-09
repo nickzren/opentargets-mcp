@@ -331,42 +331,13 @@ def load_issue(condition: str) -> tuple[Optional[IssueSnapshot], Optional[str]]:
     )
     if not ok:
         return None, f"issue lookup failed: {err}"
+    # A hand-edited marker must surface as a lookup error, not crash the run.
     try:
-        items = json.loads(out)
+        for item in json.loads(out):
+            if MARKER.format(condition=condition) in (item.get("body") or ""):
+                return _snapshot_from(item, condition), None
     except Exception as exc:  # noqa: BLE001 - reason is reported, not swallowed
-        return None, f"issue lookup returned unparsable output: {exc}"
-
-    for item in items:
-        if MARKER.format(condition=condition) not in (item.get("body") or ""):
-            continue
-        body = item["body"]
-        first = _read_marker(body, "first-failure", item["createdAt"])
-        comments = item.get("comments") or []
-
-        def _is_bot(comment):
-            login = ((comment.get("author") or {}).get("login") or "").lower()
-            return login.startswith("github-actions")
-
-        acknowledged = any(not _is_bot(c) for c in comments) or any(
-            lab.get("name") == "acknowledged" for lab in item.get("labels", [])
-        )
-        # Delivery evidence lives in the comment, so a failed body edit cannot
-        # cause a second reminder.
-        comment_marker = REMINDER_COMMENT_MARKER.format(condition=condition)
-        reminded = REMINDED_MARKER in body or any(
-            comment_marker in (c.get("body") or "") for c in comments
-        )
-        return (
-            IssueSnapshot(
-                number=item["number"],
-                state="open",
-                first_failure_at=datetime.fromisoformat(first.replace("Z", "+00:00")),
-                consecutive_failures=int(_read_marker(body, "failures", "1")),
-                acknowledged=acknowledged,
-                reminded=reminded,
-            ),
-            None,
-        )
+        return None, f"issue lookup returned unusable output: {exc}"
     return None, None
 
 
@@ -389,6 +360,8 @@ def _snapshot_from(item: dict, condition: str) -> IssueSnapshot:
     acknowledged = any(not _is_bot(c) for c in comments) or any(
         lab.get("name") == "acknowledged" for lab in item.get("labels", [])
     )
+    # Delivery evidence lives in the comment, so a failed body edit cannot
+    # cause a second reminder.
     comment_marker = REMINDER_COMMENT_MARKER.format(condition=condition)
     return IssueSnapshot(
         number=item["number"],
@@ -649,11 +622,7 @@ def run_canary_mode() -> int:
             action, result, issue, now, dry_run=False
         ),
         inspect_issue=inspect_issue,
-        read_back=lambda number, condition: (
-            load_issue_by_number(number, condition)
-            if number is not None
-            else load_issue(condition)
-        ),
+        read_back=load_issue_by_number,
         owner=OWNER,
         label=LABEL,
     )
