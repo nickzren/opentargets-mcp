@@ -32,9 +32,8 @@ _DRUG_ID_PATTERNS = (
     re.compile(r"^CHEMBL\d+$"),
 )
 _VARIANT_ID_PATTERNS = (
-    re.compile(r"^rs\d+$", re.IGNORECASE),
-    re.compile(r"^chr[0-9XYMT]+[:_].+$", re.IGNORECASE),
-    re.compile(r"^\d+_\d+_[ACGT]+_[ACGT]+$", re.IGNORECASE),
+    re.compile(r"^(\d+|X|Y|MT)_\d+_[ACGT]+_[ACGT]+$"),
+    re.compile(r"^OTVAR_(\d+|X|Y|MT)_\d+_[0-9a-f]{32}$"),
 )
 _STUDY_ID_PATTERNS = (
     re.compile(r"^GCST\d+$"),
@@ -78,7 +77,17 @@ _PARAM_SPECS: Mapping[str, _ResolverSpec] = {
         expects_list=True,
     ),
     "variant_id": _ResolverSpec(entity_names=("variant",), id_patterns=_VARIANT_ID_PATTERNS),
+    "variant_ids": _ResolverSpec(
+        entity_names=("variant",),
+        id_patterns=_VARIANT_ID_PATTERNS,
+        expects_list=True,
+    ),
     "study_id": _ResolverSpec(entity_names=("study",), id_patterns=_STUDY_ID_PATTERNS),
+    "study_ids": _ResolverSpec(
+        entity_names=("study",),
+        id_patterns=_STUDY_ID_PATTERNS,
+        expects_list=True,
+    ),
     "additional_entity_ids": _ResolverSpec(
         entity_names=("target", "disease", "drug", "variant", "study"),
         id_patterns=_ANY_ENTITY_ID_PATTERNS,
@@ -125,22 +134,77 @@ def _canonical_ontology_id(value: str) -> str:
     return f"{prefix}_{match.group(2)}"
 
 
+# mapIds misses `chr1:154453788:C:T`; the stored form is `1_154453788_C_T`.
+_CHR_PREFIX_PATTERN = re.compile(r"^chr", re.IGNORECASE)
+
+
+def _canonical_variant_id(value: str) -> str:
+    return _CHR_PREFIX_PATTERN.sub("", value).replace(":", "_")
+
+
 def _normalize_term(value: Any, patterns: Iterable[re.Pattern[str]]) -> Any:
-    """Apply notation fixes only when they yield an ID valid for this param."""
+    """Strip whitespace; apply notation fixes only when they yield an ID valid for this param."""
     if not isinstance(value, str):
         return value
-    candidate = _canonical_ontology_id(value)
-    if candidate != value and _looks_like_id(candidate, patterns):
-        return candidate
+    value = value.strip()
+    for candidate in (_canonical_ontology_id(value), _canonical_variant_id(value)):
+        if candidate != value and _looks_like_id(candidate, patterns):
+            return candidate
     return value
 
 
-def _best_hit(mapping: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    hits = mapping.get("hits", [])
+def _fold(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _top_hits(mapping: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Return the top-scoring hits, one per ID."""
+    hits = [
+        hit
+        for hit in mapping.get("hits") or []
+        if isinstance(hit, Mapping) and hit.get("id")
+    ]
     if not hits:
-        return None
-    hit_dicts = [hit for hit in hits if isinstance(hit, Mapping)]
-    return max(hit_dicts, key=lambda hit: hit.get("score", 0), default=None)
+        return []
+    top_score = max(hit.get("score", 0) for hit in hits)
+    top: dict[str, Mapping[str, Any]] = {}
+    for hit in hits:
+        if hit.get("score", 0) == top_score:
+            top.setdefault(hit["id"], hit)
+    return list(top.values())
+
+
+def _is_exact_match(term: str, hit: Mapping[str, Any]) -> bool:
+    entity = hit.get("object") or {}
+    names = (
+        hit.get("id"),
+        hit.get("name"),
+        entity.get("approvedSymbol"),
+        entity.get("approvedName"),
+    )
+    return any(_fold(name) == _fold(term) for name in names if name)
+
+
+def _best_hit(mapping: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Return the single top hit, else the unique exact match; None when ambiguous."""
+    top = _top_hits(mapping)
+    if len(top) == 1:
+        return top[0]
+    exact = [hit for hit in top if _is_exact_match(mapping.get("term") or "", hit)]
+    return exact[0] if len(exact) == 1 else None
+
+
+def _ambiguity_error(name: str, term: str, hits: list[Mapping[str, Any]]) -> ValidationError:
+    candidates = [
+        f"{hit['id']} ({hit['name']})"
+        if hit.get("name") and hit["name"] != hit["id"]
+        else hit["id"]
+        for hit in hits[:5]
+    ]
+    more = f" (+{len(hits) - 5} more)" if len(hits) > 5 else ""
+    return ValidationError(
+        f"Ambiguous {name} '{term}': {', '.join(candidates)}{more}; pass an ID"
+    )
 
 
 def _best_hit_id(mapping: Mapping[str, Any]) -> str | None:
@@ -150,6 +214,7 @@ def _best_hit_id(mapping: Mapping[str, Any]) -> str | None:
 
 async def _resolve_terms(
     client: OpenTargetsClient,
+    name: str,
     terms: list[str],
     spec: _ResolverSpec,
 ) -> tuple[dict[str, str], list[str]]:
@@ -163,6 +228,9 @@ async def _resolve_terms(
             continue
         best_id = _best_hit_id(mapping)
         if not best_id:
+            top = _top_hits(mapping)
+            if top:
+                raise _ambiguity_error(name, term, top)
             unresolved.append(term)
             continue
         resolved[term] = best_id
@@ -189,7 +257,7 @@ async def resolve_param(
         unresolved = [term for term in terms if not _looks_like_id(term, spec.id_patterns)]
         if not unresolved:
             return value
-        resolved_map, missing = await _resolve_terms(client, unresolved, spec)
+        resolved_map, missing = await _resolve_terms(client, name, unresolved, spec)
         if missing:
             message = f"Unable to resolve {name}: {', '.join(missing)}"
             raise ValidationError(message)
@@ -205,7 +273,7 @@ async def resolve_param(
     if not isinstance(value, str) or _looks_like_id(value, spec.id_patterns):
         return value
 
-    resolved_map, missing = await _resolve_terms(client, [value], spec)
+    resolved_map, missing = await _resolve_terms(client, name, [value], spec)
     if missing:
         message = f"Unable to resolve {name}: {value}"
         raise ValidationError(message)
