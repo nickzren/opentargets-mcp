@@ -12,4 +12,3 @@ services:
     ports:
       - "${FASTMCP_SERVER_PORT:-8000}:${FASTMCP_SERVER_PORT:-8000}"
     restart: unless-stopped
-    command: ["uv", "run", "python", "-m", "opentargets_mcp.server"]
