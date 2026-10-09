@@ -225,6 +225,29 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
 - **Study exploration (6 tools)** — `get_study_info`, `get_studies_by_disease`, `get_study_credible_sets`, `get_credible_set_by_id`, `get_credible_set_colocalisation`, `get_credible_sets`.
 - **Advanced GraphQL (3 tools)** — `graphql_schema`, `graphql_query`, `graphql_batch_query`.
 
+### Changes in 0.7.0
+
+Clinical report lists made known-drug and drug responses very large (over
+1 MB for breast cancer's default known-drugs page). They are now counts:
+
+- **`clinicalReportCount`** replaces the clinical report list on each row of
+  `get_target_known_drugs`, `get_disease_known_drugs`, `get_drug_info`
+  (indication rows) and `get_drug_linked_diseases`. A row whose report list
+  upstream is missing has no count; an empty list counts as `0`.
+- **Known-drug rows drop `urls`**, which repeated the report links.
+  `get_drug_info` mechanism `references.urls` are unchanged.
+- **Unchanged**: row order, `status` (the first report's trial status), every
+  `count`, and `get_drug_repurposing_candidates` output.
+- **`fields` paths**: `target.knownDrugs.rows.clinicalReports`,
+  `drug.indications.rows.clinicalReports` and
+  `drug.linkedDiseases.rows.clinicalReports` become `.clinicalReportCount`;
+  `target.knownDrugs.rows.urls` is removed. A removed path returns empty row
+  objects, not an error.
+- **Full reports**: use `graphql_query` (e.g. `drugAndClinicalCandidates.rows.clinicalReports`).
+- **Typical sizes**: breast cancer known drugs 1,087,303 → 5,332 characters;
+  EGFR known drugs 981,333 → 122,430; bevacizumab `get_drug_info` 670,829 →
+  81,243.
+
 ### Changes in 0.6.1
 
 - **Name resolution**: when several search hits tie for the top score, a name
