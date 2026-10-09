@@ -7,9 +7,14 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
+from urllib.parse import urlsplit
+from urllib.request import getproxies_environment, proxy_bypass_environment
 import time
 import logging
 
+from yarl import URL
+
+from . import __version__
 from .exceptions import NetworkError, UpstreamQueryError
 from .utils import generate_cache_key
 
@@ -25,6 +30,33 @@ if not logger.hasHandlers():
 
 _MAX_ERROR_MESSAGES = 5
 _MAX_ERROR_MESSAGE_CHARS = 500
+# A retry must leave at least this much of the request budget for its attempt.
+_MIN_ATTEMPT_SECONDS = 5.0
+
+
+def _env_proxy(url: str) -> tuple[URL | None, aiohttp.BasicAuth | None]:
+    """Return the proxy for ``url`` from *_PROXY/NO_PROXY variables only.
+
+    Unlike aiohttp's ``trust_env``, this never reads ~/.netrc or OS proxy
+    settings. Proxy credentials move to ``proxy_auth`` so error text and logs
+    never show them.
+    """
+    proxies = getproxies_environment()
+    parts = urlsplit(url)
+    proxy = proxies.get(parts.scheme)
+    if not proxy or proxy_bypass_environment(parts.hostname or "", proxies):
+        return None, None
+    proxy_url = URL(proxy)
+    return proxy_url.with_user(None), aiohttp.BasicAuth.from_url(proxy_url)
+
+
+def _retry_after_seconds(response: Any) -> int:
+    """Return a Retry-After delta-seconds value; an HTTP-date counts as 0."""
+    headers = getattr(response, "headers", None) or {}
+    try:
+        return int(headers.get("Retry-After", ""))
+    except ValueError:
+        return 0
 
 
 def _extract_graphql_errors(payload: Any) -> list[str]:
@@ -67,6 +99,7 @@ class OpenTargetsClient:
         cache_max_entries: int = 2048,
         max_retries: int = 3,
         retry_delay: float = 1.0,
+        request_budget: float = 60.0,
     ):
         """
         Initializes the OpenTargetsClient.
@@ -77,6 +110,7 @@ class OpenTargetsClient:
             cache_max_entries (int): Maximum number of cache entries to keep in memory.
             max_retries (int): Maximum number of retry attempts for failed requests (default is 3).
             retry_delay (float): Initial delay between retries in seconds (default is 1.0).
+            request_budget (float): Total seconds per request, across all attempts and retry delays (default is 60.0).
         """
         if cache_ttl < 0:
             raise ValueError("cache_ttl must be >= 0")
@@ -86,6 +120,8 @@ class OpenTargetsClient:
             raise ValueError("max_retries must be >= 1")
         if retry_delay < 0:
             raise ValueError("retry_delay must be >= 0")
+        if request_budget <= 0:
+            raise ValueError("request_budget must be > 0")
 
         self.base_url = base_url
         self.session: aiohttp.ClientSession | None = None
@@ -94,11 +130,16 @@ class OpenTargetsClient:
         self._cache_max_entries = cache_max_entries
         self._max_retries = max_retries
         self._retry_delay = retry_delay
+        self._request_budget = request_budget
 
     async def _ensure_session(self):
         """Ensures an active aiohttp.ClientSession is available."""
         if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
+            # trust_env would also send ~/.netrc credentials; see _env_proxy.
+            self.session = aiohttp.ClientSession(
+                headers={"User-Agent": f"opentargets-mcp/{__version__}"},
+                trust_env=False,
+            )
 
     def _get_cached(self, cache_key: str) -> Any | None:
         if self._cache_ttl == 0:
@@ -162,6 +203,8 @@ class OpenTargetsClient:
         variables_for_log: Optional[Dict[str, Any]] = None,
     ) -> _GraphQLHTTPResult:
         await self._ensure_session()
+        proxy, proxy_auth = _env_proxy(self.base_url)
+        deadline = time.monotonic() + self._request_budget
         last_exception = None
 
         for attempt in range(self._max_retries):
@@ -171,6 +214,9 @@ class OpenTargetsClient:
                     self.base_url,
                     json=payload,
                     headers={"Content-Type": "application/json"},
+                    proxy=proxy,
+                    proxy_auth=proxy_auth,
+                    timeout=aiohttp.ClientTimeout(total=deadline - time.monotonic()),
                 ) as response:
                     response_text = await response.text()
                     result = _GraphQLHTTPResult(
@@ -204,11 +250,14 @@ class OpenTargetsClient:
                         result.text,
                     )
 
+                    delay = self._retry_delay * (2**attempt)
+                    if result.status in (429, 503):
+                        delay = max(delay, _retry_after_seconds(response))
                     if (
                         (result.status >= 500 or result.status == 429)
                         and attempt < self._max_retries - 1
+                        and deadline - time.monotonic() > delay + _MIN_ATTEMPT_SECONDS
                     ):
-                        delay = self._retry_delay * (2**attempt)
                         logger.warning(
                             "Request failed (attempt %s/%s): HTTP %s. "
                             "Retrying in %.1fs...",
@@ -235,8 +284,11 @@ class OpenTargetsClient:
                 asyncio.TimeoutError,
             ) as exc:
                 last_exception = exc
-                if attempt < self._max_retries - 1:
-                    delay = self._retry_delay * (2**attempt)
+                delay = self._retry_delay * (2**attempt)
+                if (
+                    attempt < self._max_retries - 1
+                    and deadline - time.monotonic() > delay + _MIN_ATTEMPT_SECONDS
+                ):
                     logger.warning(
                         "Request failed (attempt %s/%s): %s. Retrying in %.1fs...",
                         attempt + 1,
@@ -256,7 +308,10 @@ class OpenTargetsClient:
                     variables_for_log,
                     exc_info=True,
                 )
-                raise NetworkError(f"HTTP request failed: {exc}") from exc
+                # str(asyncio.TimeoutError()) is empty; name the type instead.
+                raise NetworkError(
+                    f"HTTP request failed: {str(exc) or type(exc).__name__}"
+                ) from exc
 
             except Exception as exc:
                 logger.error(
