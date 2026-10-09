@@ -63,6 +63,3 @@ dev = [
     # minor releases may still change stable rules. 0.11.13 and 0.16 both pass.
     "ruff>=0.11.13,<0.17",
 ]
-examples = [
-    "openai",
-]
