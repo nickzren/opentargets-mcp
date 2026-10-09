@@ -46,6 +46,7 @@ class EvidenceApi:
         **Returns**
         - `Dict[str, Any]`: `{"target": {"evidences": {"count": int, "cursor": str, "rows": [{"id": str, "score": float, "datasourceId": str, "datatypeId": str, "disease": {...}, ...}], ...}}}`.
           Each row's `disease` is the term the evidence was annotated on.
+          `{"target": null}` when `efo_id` is not a known disease; an unknown `ensembl_id` returns an empty page (`count` 0).
 
         **Errors**
         - Propagates GraphQL and network exceptions from `OpenTargetsClient`.
@@ -146,7 +147,7 @@ class EvidenceApi:
         - `enable_indirect` (`bool`): Include evidence annotated on descendant diseases (default False).
 
         **Returns**
-        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "filteredCount": int, "unfilteredCount": int, "upstreamCount": int, "cursor": str}}}` where `count`/`filteredCount` reflect post-filtering rows, `unfilteredCount` the page before filtering and `upstreamCount` the upstream total. A row is kept when it has a `biomarkerName`, a non-empty `biomarkerList` or any non-empty `biomarkers` entry. Presence of biomarker fields depends on datasource.
+        - `Dict[str, Any]`: Response `{"target": {"evidences": {"rows": [{"id": str, "datasourceId": str, "biomarkerName": str, ...}], "count": int, "filteredCount": int, "unfilteredCount": int, "upstreamCount": int, "cursor": str}}}` where `count`/`filteredCount` reflect post-filtering rows, `unfilteredCount` the page before filtering and `upstreamCount` the upstream total. A row is kept when it has a `biomarkerName`, a non-empty `biomarkerList` or any non-empty `biomarkers` entry. Presence of biomarker fields depends on datasource. `{"target": null}` when `efo_id` is not a known disease; an unknown `ensembl_id` returns an empty page.
 
         **Errors**
         - GraphQL and transport errors propagate from `OpenTargetsClient`.

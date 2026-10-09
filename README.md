@@ -232,7 +232,7 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
   tool raises an error listing candidates instead of picking the first hit.
 - **Variants and studies**: rsIDs and `chr`/colon variant notation resolve to
   canonical variant IDs; an rsID with several alleles raises an error listing
-  them. `variant_ids` and `study_ids` lists resolve too.
+  them. `variant_ids` lists resolve too; `study_ids` accept study IDs.
 - **`search_entities`** returns the direct search results; the response shape
   is unchanged.
 - **Known drugs**: rows are ordered by clinical stage, then clinical report
@@ -244,14 +244,16 @@ For edge cases, prefer curated tools + `fields` first; use raw GraphQL only when
 - **`get_target_chemical_probes`** works again on API 26.9.
 - **Evidence**: `get_target_disease_evidence` and
   `get_target_disease_biomarkers` take `enable_indirect` (default `False`,
-  unchanged behavior).
+  unchanged results for valid IDs). An unknown disease ID now returns
+  `{"target": null}`; an unknown target ID returns an empty page.
 - **`get_target_disease_biomarkers`** drops rows without biomarker data (the
   filter previously kept them) and adds `upstreamCount`.
 - **Similar entities**: `get_disease_similar_entities` and
   `get_drug_similar_entities` return IDs and names for every entity type, and
   `get_similar_targets` accepts `entity_names`.
-- **Network**: transport failures return a readable error, and each call is
-  bounded by a ~60 s budget. Proxies are honored via environment variables.
+- **Network**: transport failures return a readable error, and each upstream
+  request, including retries, is bounded by a ~60 s budget (one tool call may
+  make several requests). Proxies are honored via environment variables.
 - **Removed**: `run.sh`, the OpenAI ReAct agent example, `.env.example` and the
   `examples` extra.
 
