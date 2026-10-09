@@ -137,10 +137,7 @@ The MCP server acts as a bridge between client applications and the Open Targets
 
 ### Running the Server Standalone
 ```bash
-# Using the convenience script (installs uv if missing, then syncs dependencies)
-./run.sh
-
-# Or run directly with uv (stdio transport by default)
+# From a clone, with uv (stdio transport by default)
 uv run python -m opentargets_mcp.server
 
 # Installed entrypoints
@@ -197,23 +194,6 @@ uv run python examples/disease_to_drug.py "schizophrenia"
 uv run python examples/drug_safety_profile.py "osimertinib"
 uv run python examples/genetic_target_prioritization.py "inflammatory bowel disease"
 ```
-
-### AI Agent Example
-
-The ReAct Agent provides an interactive terminal interface for exploring Open Targets data:
-
-![Open Targets React Agent Demo](docs/screenshots/react-agent-demo.png)
-
-```bash
-# Copy the example .env file and add your OpenAI API key
-cp .env.example .env
-# Then edit .env and set your OPENAI_API_KEY
-
-# Run agent
-uv run python examples/react_agent.py
-```
-
-The agent uses a ReAct (Reasoning and Acting) pattern to break down complex biomedical queries into steps, making it easy to explore drug targets, diseases, and their relationships.
 
 ## Available Tools
 
