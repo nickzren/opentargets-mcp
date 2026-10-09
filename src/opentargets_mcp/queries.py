@@ -34,12 +34,12 @@ _MAX_ERROR_MESSAGE_CHARS = 500
 _MIN_ATTEMPT_SECONDS = 5.0
 
 
-def _env_proxy(url: str) -> tuple[URL | None, aiohttp.BasicAuth | None]:
-    """Return the proxy for ``url`` from *_PROXY/NO_PROXY variables only.
+def _env_proxy(url: str) -> tuple[URL | None, dict[str, str] | None]:
+    """Return the proxy and its auth headers for ``url`` from *_PROXY/NO_PROXY only.
 
     Unlike aiohttp's ``trust_env``, this never reads ~/.netrc or OS proxy
-    settings. Proxy credentials move to ``proxy_auth`` so error text and logs
-    never show them.
+    settings. Proxy credentials move into a ``Proxy-Authorization`` header so
+    error text and logs never show them.
     """
     proxies = getproxies_environment()
     parts = urlsplit(url)
@@ -47,7 +47,9 @@ def _env_proxy(url: str) -> tuple[URL | None, aiohttp.BasicAuth | None]:
     if not proxy or proxy_bypass_environment(parts.hostname or "", proxies):
         return None, None
     proxy_url = URL(proxy)
-    return proxy_url.with_user(None), aiohttp.BasicAuth.from_url(proxy_url)
+    auth = aiohttp.BasicAuth.from_url(proxy_url)
+    headers = {"Proxy-Authorization": auth.encode()} if auth else None
+    return proxy_url.with_user(None), headers
 
 
 def _retry_after_seconds(response: Any) -> int:
@@ -203,7 +205,7 @@ class OpenTargetsClient:
         variables_for_log: Optional[Dict[str, Any]] = None,
     ) -> _GraphQLHTTPResult:
         await self._ensure_session()
-        proxy, proxy_auth = _env_proxy(self.base_url)
+        proxy, proxy_headers = _env_proxy(self.base_url)
         deadline = time.monotonic() + self._request_budget
         last_exception = None
 
@@ -215,7 +217,7 @@ class OpenTargetsClient:
                     json=payload,
                     headers={"Content-Type": "application/json"},
                     proxy=proxy,
-                    proxy_auth=proxy_auth,
+                    proxy_headers=proxy_headers,
                     timeout=aiohttp.ClientTimeout(total=deadline - time.monotonic()),
                 ) as response:
                     response_text = await response.text()

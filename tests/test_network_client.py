@@ -89,10 +89,10 @@ class _TimingOutSession(_FakeSession):
 def test_env_proxy_reads_https_proxy_in_either_case(proxy_env, name):
     proxy_env.setenv(name, PROXY_URL)
 
-    proxy, auth = _env_proxy(API_URL)
+    proxy, headers = _env_proxy(API_URL)
 
     assert str(proxy) == PROXY_URL
-    assert auth is None
+    assert headers is None
 
 
 @pytest.mark.parametrize("no_proxy", [".opentargets.org", "*"])
@@ -110,10 +110,10 @@ def test_env_proxy_is_none_when_unset(proxy_env):
 def test_env_proxy_moves_credentials_out_of_the_url(proxy_env):
     proxy_env.setenv("HTTPS_PROXY", "http://user:secret@proxy.test:3128")
 
-    proxy, auth = _env_proxy(API_URL)
+    proxy, headers = _env_proxy(API_URL)
 
     assert str(proxy) == PROXY_URL
-    assert (auth.login, auth.password) == ("user", "secret")
+    assert headers == {"Proxy-Authorization": "Basic dXNlcjpzZWNyZXQ="}
 
 
 @pytest.mark.asyncio
@@ -126,7 +126,7 @@ async def test_requests_use_env_proxy_and_send_no_credentials(proxy_env):
 
     (kwargs,) = client.session.kwargs
     assert str(kwargs["proxy"]) == PROXY_URL
-    assert kwargs["proxy_auth"] is None
+    assert kwargs["proxy_headers"] is None
     assert "auth" not in kwargs
     assert "Authorization" not in kwargs["headers"]
 
