@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 
 from opentargets_mcp.exceptions import ValidationError
@@ -437,3 +439,146 @@ async def test_get_drug_repurposing_candidates_keeps_row_stage_on_support_rows(
     )
     support = default_phase["candidates"][0]["supportingTargets"]
     assert [row["targetId"] for row in support] == ["ENSG_B"]
+
+
+def _report(n, status):
+    return {
+        "id": f"NCT{n:08d}",
+        "source": "clinicaltrials",
+        "clinicalStage": "PHASE_3",
+        "trialPhase": "PHASE3",
+        "trialOverallStatus": status,
+        "url": f"https://clinicaltrials.gov/study/NCT{n:08d}",
+    }
+
+
+def _known_drug_row(row_id, stage, drug_id, statuses):
+    return {
+        "id": row_id,
+        "maxClinicalStage": stage,
+        "drug": {
+            "id": drug_id,
+            "name": drug_id.lower(),
+            "drugType": "Small molecule",
+            "maximumClinicalStage": stage,
+            "description": None,
+            "drugWarnings": [],
+        },
+        "diseases": [{"diseaseFromSource": "x", "disease": {"id": "MONDO_1", "name": "d"}}],
+        "clinicalReports": [_report(i, s) for i, s in enumerate(statuses)],
+    }
+
+
+# Stage ties are broken only by report count, and the first report sets status.
+_KNOWN_DRUG_ROWS = {
+    "ENSG_T1": [
+        _known_drug_row("r1", "APPROVAL", "CHEMBL_A", ["COMPLETED"]),
+        _known_drug_row("r2", "APPROVAL", "CHEMBL_B", [None, "COMPLETED", "COMPLETED"]),
+        _known_drug_row("r3", "APPROVAL", "CHEMBL_C", ["RECRUITING", "COMPLETED"]),
+        _known_drug_row("r4", "PHASE_2", "CHEMBL_D", ["COMPLETED"] * 9),
+    ],
+    "ENSG_T2": [
+        _known_drug_row("r5", "PHASE_3", "CHEMBL_A", []),
+        _known_drug_row("r6", "PHASE_3", "CHEMBL_E", ["TERMINATED", "COMPLETED", None, "COMPLETED"]),
+        _known_drug_row("r7", "WITHDRAWAL", "CHEMBL_C", ["WITHDRAWN"]),
+    ],
+}
+
+
+class _UpstreamClient:
+    """Answers the workflow's raw queries so the real known-drugs path runs."""
+
+    async def _query(self, query, variables=None):
+        if "query DiseaseAssociatedTargets" in query:
+            rows = [
+                {"target": {"id": "ENSG_T1", "approvedSymbol": "T1", "approvedName": "one"}, "score": 0.9},
+                {"target": {"id": "ENSG_T2", "approvedSymbol": "T2", "approvedName": "two"}, "score": 0.5},
+            ]
+            return {"disease": {"id": "MONDO_1", "name": "d", "associatedTargets": {"count": 2, "rows": rows}}}
+        if "query TargetKnownDrugs" in query:
+            rows = copy.deepcopy(_KNOWN_DRUG_ROWS[variables["ensemblId"]])
+            return {"target": {"drugAndClinicalCandidates": {"count": len(rows), "rows": rows}}}
+        raise AssertionError(query)
+
+
+# Frozen from 0.6.1: the clinical-report payload change must not alter it.
+_EXPECTED_REPURPOSING = {'candidates': [{'bestAssociationScore': 0.9,
+                     'bestPhase': 4,
+                     'drug': {'drugType': 'Small molecule',
+                              'id': 'CHEMBL_C',
+                              'isApproved': True,
+                              'maximumClinicalStage': 'APPROVAL',
+                              'maximumClinicalTrialPhase': 4,
+                              'name': 'chembl_c'},
+                     'supportingTargetCount': 2,
+                     'supportingTargets': [{'associationScore': 0.9,
+                                            'maxClinicalStage': 'APPROVAL',
+                                            'mechanismOfAction': None,
+                                            'phase': 4,
+                                            'status': 'RECRUITING',
+                                            'targetId': 'ENSG_T1',
+                                            'targetSymbol': 'T1'},
+                                           {'associationScore': 0.5,
+                                            'maxClinicalStage': 'WITHDRAWAL',
+                                            'mechanismOfAction': None,
+                                            'phase': 0,
+                                            'status': 'WITHDRAWN',
+                                            'targetId': 'ENSG_T2',
+                                            'targetSymbol': 'T2'}]},
+                    {'bestAssociationScore': 0.9,
+                     'bestPhase': 4,
+                     'drug': {'drugType': 'Small molecule',
+                              'id': 'CHEMBL_B',
+                              'isApproved': True,
+                              'maximumClinicalStage': 'APPROVAL',
+                              'maximumClinicalTrialPhase': 4,
+                              'name': 'chembl_b'},
+                     'supportingTargetCount': 1,
+                     'supportingTargets': [{'associationScore': 0.9,
+                                            'maxClinicalStage': 'APPROVAL',
+                                            'mechanismOfAction': None,
+                                            'phase': 4,
+                                            'status': None,
+                                            'targetId': 'ENSG_T1',
+                                            'targetSymbol': 'T1'}]},
+                    {'bestAssociationScore': 0.5,
+                     'bestPhase': 3,
+                     'drug': {'drugType': 'Small molecule',
+                              'id': 'CHEMBL_E',
+                              'isApproved': False,
+                              'maximumClinicalStage': 'PHASE_3',
+                              'maximumClinicalTrialPhase': 3,
+                              'name': 'chembl_e'},
+                     'supportingTargetCount': 1,
+                     'supportingTargets': [{'associationScore': 0.5,
+                                            'maxClinicalStage': 'PHASE_3',
+                                            'mechanismOfAction': None,
+                                            'phase': 3,
+                                            'status': 'TERMINATED',
+                                            'targetId': 'ENSG_T2',
+                                            'targetSymbol': 'T2'}]}],
+     'disease': {'id': 'MONDO_1', 'name': 'd'},
+     'summary': {'filters': {'approvedOnly': False,
+                             'minAssociationScore': 0.2,
+                             'minClinicalPhase': 0},
+                 'targetsEvaluated': 2,
+                 'targetsFailedDrugLookup': 0,
+                 'targetsPassedScoreFilter': 2,
+                 'targetsWithKnownDrugs': 2,
+                 'uniqueDrugCandidates': 3},
+     'targets': [{'association_score': 0.9,
+                  'target_id': 'ENSG_T1',
+                  'target_name': 'one',
+                  'target_symbol': 'T1'},
+                 {'association_score': 0.5,
+                  'target_id': 'ENSG_T2',
+                  'target_name': 'two',
+                  'target_symbol': 'T2'}]}
+
+
+@pytest.mark.asyncio
+async def test_repurposing_output_unchanged_by_report_counts():
+    result = await WorkflowApi().get_drug_repurposing_candidates(
+        _UpstreamClient(), "MONDO_1", max_drugs_per_target=2, min_clinical_phase=0
+    )
+    assert result == _EXPECTED_REPURPOSING
