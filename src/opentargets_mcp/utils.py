@@ -113,15 +113,30 @@ def promote_clinical_candidates(
     return parent
 
 
+# Display order only; the legacy `phase` (clinical_stage_to_phase) is unchanged.
+# WITHDRAWAL only follows an approval, so it ranks with APPROVAL.
+_DISPLAY_STAGE_RANK = {
+    "APPROVAL": 8,
+    "PHASE_4": 8,
+    "WITHDRAWAL": 8,
+    "PREAPPROVAL": 7,
+    "PHASE_3": 6,
+    "PHASE_2_3": 4,
+    "PHASE_2": 4,
+    "PHASE_1_2": 2,
+    "PHASE_1": 2,
+    "EARLY_PHASE_1": 1,
+}
+
+
 def _clinical_display_order(row: Any) -> tuple[int, int, str]:
     """Sort key: most advanced stage, then most clinical reports, then row id.
 
-    A display heuristic, not an evidence ranking. WITHDRAWAL only follows an
-    approval, so it ranks with APPROVAL here; the legacy `phase` is unchanged.
+    A display heuristic, not an evidence ranking.
     """
     row = row if isinstance(row, dict) else {}
     stage = row.get("maxClinicalStage")
-    rank = clinical_stage_to_phase("APPROVAL" if stage == "WITHDRAWAL" else stage)
+    rank = _DISPLAY_STAGE_RANK.get(stage.upper() if isinstance(stage, str) else "", 0)
     return (-rank, -len(row.get("clinicalReports") or []), row.get("id") or "")
 
 
