@@ -7,7 +7,13 @@ from typing import Any, Dict
 
 from ..exceptions import ValidationError
 from ..queries import OpenTargetsClient
-from ..resolver import _DISEASE_ID_PATTERNS, _best_hit, _looks_like_id
+from ..resolver import (
+    _DISEASE_ID_PATTERNS,
+    _ambiguity_error,
+    _best_hit,
+    _looks_like_id,
+    _top_hits,
+)
 from .disease import DiseaseApi
 from .meta import MetaApi
 from .target import TargetApi
@@ -41,6 +47,9 @@ class WorkflowApi:
         first_mapping = mappings[0] if isinstance(mappings[0], dict) else {}
         best = _best_hit(first_mapping)
         if best is None:
+            top = _top_hits(first_mapping)
+            if top:
+                raise _ambiguity_error("efo_id", value, top)
             raise ValidationError(f"Unable to resolve disease identifier: {value}")
         best_id = best.get("id")
         if not best_id:

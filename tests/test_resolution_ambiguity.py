@@ -43,9 +43,9 @@ MAP_IDS_HITS = {
         _hit("MONDO_0004989", "breast carcinoma"),
         _hit("MONDO_0007254", "breast cancer"),
     ],
-    "Breast  Cancer": [
+    "Breast Cancer": [
         _hit("MONDO_0004989", "breast carcinoma"),
-        _hit("MONDO_0007254", "breast cancer"),
+        _hit("MONDO_0007254", "Breast  Cancer"),
     ],
     "p53": [
         _hit("ENSG00000141510", "TP53", approvedSymbol="TP53"),
@@ -59,7 +59,7 @@ MAP_IDS_HITS = {
         _hit("17_7676154_G_T", "17_7676154_G_T"),
         _hit("17_7676154_G_C", "17_7676154_G_C"),
     ],
-    "asthma GWAS": [_hit("GCST90002357", "GCST90002357")],
+    "gcst90002357": [_hit("GCST90002357", "GCST90002357")],
 }
 
 
@@ -153,11 +153,11 @@ async def test_list_params_resolve_names_and_keep_ids():
     variant_ids = await resolve_param(
         client, "variant_ids", ["rs4129267", "X_67545785_G_A"]
     )
-    study_ids = await resolve_param(client, "study_ids", ["asthma GWAS", "GCST004131"])
+    study_ids = await resolve_param(client, "study_ids", ["gcst90002357", "GCST004131"])
 
     assert variant_ids == ["1_154453788_C_T", "X_67545785_G_A"]
     assert study_ids == ["GCST90002357", "GCST004131"]
-    assert client.mapped_terms == [["rs4129267"], ["asthma GWAS"]]
+    assert client.mapped_terms == [["rs4129267"], ["gcst90002357"]]
 
 
 @pytest.mark.asyncio
@@ -191,6 +191,9 @@ async def test_surrounding_whitespace_is_stripped():
             "OTVAR_20_7977116_061a7484fe8a1f88a686611e2ca7fd5a",
         ),
         ("chr1:154453788:C:T", "1_154453788_C_T"),
+        ("chr1:154453788:c:t", "1_154453788_C_T"),
+        ("chrx:67545785:G:A", "X_67545785_G_A"),
+        ("chrM:3243:A:G", "MT_3243_A_G"),
         ("1:154453788:C:T", "1_154453788_C_T"),
         ("chr1_154453788_C_T", "1_154453788_C_T"),
         ("chrX:67545785:G:A", "X_67545785_G_A"),

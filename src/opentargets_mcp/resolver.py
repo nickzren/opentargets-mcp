@@ -136,17 +136,22 @@ def _canonical_ontology_id(value: str) -> str:
 
 # mapIds misses `chr1:154453788:C:T`; the stored form is `1_154453788_C_T`.
 _CHR_PREFIX_PATTERN = re.compile(r"^chr", re.IGNORECASE)
+_MITO_CONTIG_PATTERN = re.compile(r"^M_")
 
 
 def _canonical_variant_id(value: str) -> str:
-    return _CHR_PREFIX_PATTERN.sub("", value).replace(":", "_")
+    """Rewrite chr-prefixed or colon-separated notation (incl. chrM) to OT form."""
+    if ":" not in value and not _CHR_PREFIX_PATTERN.match(value):
+        return value
+    value = _CHR_PREFIX_PATTERN.sub("", value).replace(":", "_").upper()
+    return _MITO_CONTIG_PATTERN.sub("MT_", value)
 
 
 def _normalize_term(value: Any, patterns: Iterable[re.Pattern[str]]) -> Any:
-    """Strip whitespace; apply notation fixes only when they yield an ID valid for this param."""
+    """Collapse whitespace; apply notation fixes only when they yield an ID valid for this param."""
     if not isinstance(value, str):
         return value
-    value = value.strip()
+    value = " ".join(value.split())
     for candidate in (_canonical_ontology_id(value), _canonical_variant_id(value)):
         if candidate != value and _looks_like_id(candidate, patterns):
             return candidate

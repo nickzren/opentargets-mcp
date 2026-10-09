@@ -310,6 +310,25 @@ async def test_get_drug_repurposing_candidates_resolves_disease_name(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_get_drug_repurposing_candidates_lists_ambiguous_disease_names(
+    monkeypatch,
+):
+    api = WorkflowApi()
+
+    async def fake_map_ids(*_args, **_kwargs):
+        hits = [
+            {"id": "MONDO_1", "name": "lung carcinoma", "score": 1},
+            {"id": "MONDO_2", "name": "lung neoplasm", "score": 1},
+        ]
+        return {"mapIds": {"mappings": [{"term": "lung tumour", "hits": hits}]}}
+
+    monkeypatch.setattr(api._meta_api, "map_ids", fake_map_ids)
+
+    with pytest.raises(ValidationError, match="Ambiguous efo_id 'lung tumour': MONDO_1"):
+        await api.get_drug_repurposing_candidates(client=object(), efo_id="lung tumour")
+
+
+@pytest.mark.asyncio
 async def test_get_drug_repurposing_candidates_rejects_invalid_canonical_id(
     monkeypatch,
 ):
