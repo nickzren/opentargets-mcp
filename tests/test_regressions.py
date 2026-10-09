@@ -72,42 +72,46 @@ class _FakeSession:
         self.closed = True
 
 
+class _SearchClient:
+    """Answers every query with the given search payload and records it."""
+
+    def __init__(self, search):
+        self.search = search
+        self.queries = []
+
+    async def _query(self, query, variables=None):
+        self.queries.append((query, variables))
+        return {"search": self.search}
+
+
 @pytest.mark.asyncio
-async def test_search_entities_handles_empty_hits_without_crashing(monkeypatch):
-    api = SearchApi()
+async def test_search_entities_handles_empty_hits_without_crashing():
+    client = _SearchClient({"total": 0, "hits": []})
 
-    async def fake_search_direct(
-        client, query_string, entity_names, page_index, page_size
-    ):
-        if query_string == "alias":
-            return {"search": {"total": 0, "hits": []}}
-        return {
-            "search": {
-                "total": 1,
-                "hits": [{"id": "ENSG_TEST", "entity": "target", "name": "TEST"}],
-            }
-        }
+    result = await SearchApi().search_entities(client, "alias", entity_names=["target"])
 
-    async def fake_map_ids(client, query_terms, entity_names=None):
-        return {
-            "mapIds": {
-                "mappings": [
-                    {
-                        "term": query_terms[0],
-                        "hits": [{"id": "ENSG_TEST", "name": "TEST", "score": 1.0}],
-                    }
-                ]
-            }
-        }
+    assert result == {"search": {"total": 0, "hits": [], "triples": []}}
+    assert len(client.queries) == 1
 
-    monkeypatch.setattr(api, "_search_direct", fake_search_direct)
-    monkeypatch.setattr(api.meta_api, "map_ids", fake_map_ids)
 
-    result = await api.search_entities(object(), "alias", entity_names=["target"])
-    assert result["search"]["hits"][0]["id"] == "ENSG_TEST"
-    assert result["search"]["triples"] == [
-        {"id": "ENSG_TEST", "entity": "target", "name": "TEST"}
+@pytest.mark.asyncio
+async def test_search_entities_returns_direct_results_without_mapids_override():
+    """mapIds' first tied hit used to replace the page ('PD-1' became TORIPALIMAB)."""
+    hits = [
+        {"id": "ENSG00000188389", "entity": "target", "name": "PDCD1"},
+        {"id": "CHEMBL4297843", "entity": "drug", "name": "TORIPALIMAB"},
     ]
+    client = _SearchClient({"total": 489, "hits": hits})
+
+    result = await SearchApi().search_entities(client, "PD-1", page_index=1)
+
+    assert result["search"]["total"] == 489
+    assert result["search"]["hits"] == hits
+    assert result["search"]["triples"] == hits
+    [(query, variables)] = client.queries
+    assert "mapIds" not in query
+    assert variables["queryString"] == "PD-1"
+    assert variables["pageIndex"] == 1
 
 
 @pytest.mark.asyncio

@@ -4,12 +4,10 @@ Defines API methods and MCP tools related to general search functionalities
 across multiple entity types in Open Targets.
 """
 from typing import Any, Dict, List, Optional
-import asyncio
 import logging
 from ..exceptions import ValidationError
 from ..queries import OpenTargetsClient
 from ..utils import filter_none_values, validate_required_int
-from .meta import MetaApi
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +24,6 @@ class SearchApi:
     """
 
     def __init__(self):
-        self.meta_api = MetaApi()
         self.fuzzy_process = fuzzy_process
         if not self.fuzzy_process:
             logger.warning(
@@ -145,38 +142,9 @@ class SearchApi:
         logger.info("%s %s", top_hit["id"], top_hit["object"]["approvedSymbol"])
         ```
         """
-        direct_search_task = asyncio.create_task(
-            self._search_direct(
-                client, query_string, entity_names, page_index, page_size
-            )
+        direct_results = await self._search_direct(
+            client, query_string, entity_names, page_index, page_size
         )
-        map_ids_task = asyncio.create_task(
-            self.meta_api.map_ids(client, [query_string], entity_names=entity_names)
-        )
-
-        direct_results, mapped_results = await asyncio.gather(
-            direct_search_task, map_ids_task
-        )
-
-        from ..resolver import _best_hit
-
-        mappings = mapped_results.get("mapIds", {}).get("mappings", [])
-        best_mapped_hit = _best_hit(mappings[0]) if mappings else None
-
-        direct_hits = direct_results.get("search", {}).get("hits") or []
-        direct_top_hit_id = direct_hits[0].get("id") if direct_hits else None
-        if best_mapped_hit and best_mapped_hit.get("id") != direct_top_hit_id:
-            logger.info(
-                "Resolving '%s' to best match: '%s' (%s). Fetching canonical results.",
-                query_string,
-                best_mapped_hit.get("name"),
-                best_mapped_hit.get("id"),
-            )
-            resolved_results = await self._search_direct(
-                client, best_mapped_hit["id"], entity_names, page_index, page_size
-            )
-            return self._attach_search_triples(resolved_results)
-
         return self._attach_search_triples(direct_results)
 
     async def search_suggestions(

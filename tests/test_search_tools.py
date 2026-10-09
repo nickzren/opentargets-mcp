@@ -90,6 +90,12 @@ class TestSearchTools:
         if result.get("target"):
             assert "similarEntities" in result["target"]
 
+    async def test_search_entities_keeps_direct_results(self, client: OpenTargetsClient):
+        """mapIds used to swap this page for a TORIPALIMAB-only search (total 1)."""
+        result = await self.search_api.search_entities(client, "PD-1", page_size=5)
+        assert result["search"]["total"] > 1
+        assert "ENSG00000188389" in [hit["id"] for hit in result["search"]["hits"]]
+
     async def test_search_facets(self, client: OpenTargetsClient):
         result = await self.search_api.search_facets(client, query_string="cancer", page_size=1)
         assert result is not None
