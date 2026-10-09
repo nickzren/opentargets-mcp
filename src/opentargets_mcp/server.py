@@ -10,11 +10,12 @@ import inspect
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Callable, Optional
+from typing import Annotated, Any, Callable, Optional, get_type_hints
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 import mcp.types as mcp_types
@@ -94,21 +95,24 @@ mcp = FastMCP(
     version=__version__,
     instructions=(
         "Tool selection policy:\n"
-        "1) If you have a name/symbol, call the relevant tool directly (IDs are auto-resolved).\n"
+        "1) Pass names, symbols or rsIDs directly as ensembl_id/efo_id/chembl_id/variant_id/study_id "
+        "(or list forms); they auto-resolve. An ambiguous name raises an error listing "
+        "candidates: pass one of their IDs.\n"
         "2) Use get_{entity}_info for basic lookup.\n"
-        "3) Use get_{entity}_associated_* for relationships.\n"
-        "4) Use get_{entity}_known_drugs for therapeutics.\n"
-        "5) Use fields=[...] to limit output when you only need specific fields.\n"
+        "3) Use get_{target,disease}_associated_* or get_drug_linked_* for relationships.\n"
+        "4) Use get_{target,disease}_known_drugs for therapeutics.\n"
+        "5) Use get_drug_repurposing_candidates (the one workflow tool) for multi-hop "
+        "disease-target-drug prioritisation.\n"
         "6) If a name fails to resolve, call search_entities to find the canonical ID.\n"
         "7) Use graphql_query only if no curated tool fits.\n"
-        "8) Use workflow tools for multi-hop disease-target-drug prioritisation.\n"
         "\n"
         "Common conventions:\n"
-        "- `fields` accepts dot-paths to trim response payloads "
-        "(e.g., [\"target.approvedSymbol\", \"target.associatedDiseases.rows.disease.name\"]).\n"
-        "- Pagination: `page_index` >= 0, `page_size` in [1, 500].\n"
-        "- Tools auto-resolve free-text names to canonical IDs for ensembl_id/efo_id/chembl_id/variant_id/study_id (and their list variants).\n"
-        "- All tools raise NetworkError on transport failure and ValidationError on bad input.\n"
+        "- Tools that accept `fields` trim payloads to dot-paths from the response root key "
+        "(e.g., [\"target.approvedSymbol\"]).\n"
+        "- Paging: most tools take `page_index` >= 0 and `page_size` in [1, 500]; others take "
+        "`size` and/or `cursor` (pass back the last `cursor`).\n"
+        "- Check `count`, not just `rows`, before concluding something is absent.\n"
+        "- Network failures and bad input return readable errors; retry network failures later.\n"
         "- If the Open Targets API rejects a query, the tool error text carries the upstream "
         "GraphQL message (e.g. a field renamed by a data release). Act on that message first; "
         "introspect the schema when it does not name a replacement.\n"
@@ -147,6 +151,27 @@ def _extract_tool_description(method: Callable[..., Any]) -> str | None:
     return summary or None
 
 
+# Argument descriptions for names that are ambiguous on their own. Only names
+# that mean the same thing in every tool belong here.
+_PARAM_DESCRIPTIONS = {
+    "efo_id": "MONDO/EFO/HP/Orphanet/DOID ID (MONDO_0005148 or MONDO:0005148) or disease name.",
+    "variant_id": "Variant ID like 1_154453788_C_T, an rsID, or chr-prefixed/colon notation.",
+    "variant_ids": "Variant IDs like 1_154453788_C_T, rsIDs, or chr-prefixed/colon notation.",
+    "fields": 'Dot-paths to keep, from the response root key, e.g. ["target.approvedSymbol"].',
+    "cursor": "The previous response's `cursor` value; omit for the first page.",
+    "entity_names": 'Entity types to include, e.g. ["target", "disease", "drug"].',
+    "additional_entity_ids": "Extra target/disease/drug IDs or names to combine with the main entity.",
+    "datasource_ids": 'Evidence datasource IDs to keep, e.g. ["eva", "chembl", "gwas_credible_sets"].',
+    "enable_indirect": "Also include data annotated on descendant diseases; false (default) = direct only.",
+    "study_types": "Study types: gwas, eqtl, pqtl, sqtl, tuqtl, sceqtl, scpqtl, scsqtl, sctuqtl.",
+    "regions": 'Genomic regions as CHROM:START-END, e.g. ["1:154000000-155000000"].',
+    "study_locus_id": "Credible-set ID (`studyLocusId`) from credible-set results.",
+    "study_locus_ids": "Credible-set IDs (`studyLocusId`) from credible-set results.",
+    "category_id": 'Facet category from `categories[].name`, e.g. "GO:BP" or "Reactome".',
+    "source_database": "Interaction source: intact, reactome, signor or string.",
+}
+
+
 def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap an API coroutine so the shared client is injected automatically."""
     signature = inspect.signature(method)
@@ -179,6 +204,13 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
 
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
+    # A new dict: functools.wraps shares the method's own __annotations__.
+    wrapper.__annotations__ = {
+        name: Annotated[hint, Field(description=_PARAM_DESCRIPTIONS[name])]
+        if name in _PARAM_DESCRIPTIONS
+        else hint
+        for name, hint in get_type_hints(method).items()
+    }
 
     # Preserve the original method docstring for tooling and auto-generated metadata.
     wrapper.__doc__ = inspect.getdoc(method)

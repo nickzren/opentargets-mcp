@@ -48,6 +48,11 @@ class TestMetaTools:
         if result.get("geneOntologyTerms"):
             assert isinstance(result["geneOntologyTerms"], list)
 
+    async def test_get_gene_ontology_terms_unknown_id_is_null(self, client: OpenTargetsClient):
+        result = await self.meta_api.get_gene_ontology_terms(client, ["GO:0006915", "GO:9999999"])
+        assert result["geneOntologyTerms"][0]["name"] == "apoptotic process"
+        assert result["geneOntologyTerms"][1] is None
+
     async def test_map_ids(self, client: OpenTargetsClient):
         query_terms = ["BRAF", "melanoma", "vemurafenib"]
         result = await self.meta_api.map_ids(client, query_terms)
