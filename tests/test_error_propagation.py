@@ -6,8 +6,10 @@ Covers the two failure modes reported in issue #4:
 
 Both must reach the MCP client with actionable text rather than being reduced
 to the generic ``Error calling tool '<name>'`` produced by ``mask_error_details``.
+Transport failures (``NetworkError``) must reach it as readable text too.
 """
 
+import asyncio
 import json
 
 import pytest
@@ -172,6 +174,30 @@ async def test_tool_call_reports_graphql_message_on_http_200_with_errors(
 
     assert result.is_error
     assert MISSING_FIELD_MESSAGE in _error_text(result)
+
+
+class _TimingOutSession(_FakeSession):
+    def post(self, *_args, **_kwargs):
+        raise asyncio.TimeoutError()
+
+
+@pytest.mark.asyncio
+async def test_tool_call_reports_network_error_as_readable_text(monkeypatch):
+    client = OpenTargetsClient(max_retries=1)
+    client.session = _TimingOutSession([])
+    monkeypatch.setattr(server_module, "get_client", lambda: client)
+
+    async with Client(server_module.mcp) as mcp_client:
+        result = await mcp_client.call_tool(
+            "get_target_info",
+            {"ensembl_id": "ENSG00000157764"},
+            raise_on_error=False,
+        )
+
+    assert result.is_error
+    assert "Open Targets API unreachable: HTTP request failed: TimeoutError" in (
+        _error_text(result)
+    )
 
 
 @pytest.mark.asyncio

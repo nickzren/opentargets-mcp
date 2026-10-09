@@ -20,7 +20,7 @@ from starlette.responses import JSONResponse, Response
 import mcp.types as mcp_types
 
 from . import __version__
-from .exceptions import UpstreamQueryError, ValidationError
+from .exceptions import NetworkError, UpstreamQueryError, ValidationError
 from .queries import OpenTargetsClient
 from .settings import ServerSettings
 from .tools.disease import DiseaseApi
@@ -173,6 +173,9 @@ def _make_tool_wrapper(method: Callable[..., Any]) -> Callable[..., Any]:
         except ValidationError as exc:
             # Bad input is the caller's to correct, so it needs to say what.
             raise ToolError(str(exc)) from exc
+        except NetworkError as exc:
+            # Transport failures are transient; say so instead of a masked error.
+            raise ToolError(f"Open Targets API unreachable: {exc}; retry later") from exc
 
     params = list(signature.parameters.values())[1:]
     wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
