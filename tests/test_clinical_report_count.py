@@ -92,7 +92,15 @@ async def test_drug_info_counts_indication_reports_and_keeps_mechanism_urls():
     assert [row["clinicalReportCount"] for row in indications["rows"]] == [2, 0]
     assert not any("clinicalReports" in row for row in indications["rows"])
     assert indications["count"] == 2
-    assert result["drug"]["mechanismsOfAction"]["rows"][0]["references"] == references
+    assert result["drug"]["mechanismsOfAction"]["rows"][0]["references"] == [
+        {"source": "DailyMed", "ids": ["x"], "urls": ["https://example.test/x"]}
+    ]
+
+
+def test_drug_info_query_keeps_mechanism_reference_urls():
+    body = (_SRC / "drug/identity.py").read_text().split("query DrugInfo", 1)[1].split('"""', 1)[0]
+    selection = re.search(r"references\s*\{([^}]*)\}", body).group(1).split()
+    assert selection == ["source", "ids", "urls"]
 
 
 @pytest.mark.asyncio
