@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/nickzren-opentargets-mcp-badge.png)](https://mseep.ai/app/nickzren-opentargets-mcp)
+
 # Open Targets MCP Server
 
 [![CI](https://img.shields.io/github/actions/workflow/status/nickzren/opentargets-mcp/ci.yml?label=CI)](https://github.com/nickzren/opentargets-mcp/actions/workflows/ci.yml)
